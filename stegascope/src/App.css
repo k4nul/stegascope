@@ -1,0 +1,133 @@
+:root {
+  --bg: #f3f4ef;
+  --paper: #fffdf7;
+  --ink: #1d2422;
+  --muted: #5d6b66;
+  --line: #d5ddd7;
+  --accent: #0d6a59;
+  --warn: #b93821;
+
+  font-family: "Segoe UI", "Noto Sans", sans-serif;
+  line-height: 1.5;
+  font-weight: 400;
+  color: var(--ink);
+  background: radial-gradient(circle at top left, #ffffff, var(--bg));
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  color: var(--ink);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+.app {
+  width: min(960px, 92vw);
+  margin: 0 auto;
+  padding: 48px 0 64px;
+  display: grid;
+  gap: 20px;
+}
+
+.hero {
+  padding: 20px 0 12px;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--accent);
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+h1 {
+  margin: 6px 0;
+  font-size: clamp(2rem, 4vw, 3rem);
+  line-height: 1.1;
+}
+
+.subtitle {
+  margin: 0;
+  color: var(--muted);
+}
+
+.panel {
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  padding: 18px;
+  box-shadow: 0 6px 24px rgba(15, 29, 26, 0.06);
+}
+
+.panel h2 {
+  margin: 0 0 12px;
+  font-size: 1.15rem;
+}
+
+.status-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+}
+
+.status-grid article {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px;
+  background: #ffffff;
+}
+
+.status-grid span {
+  display: block;
+  font-size: 0.8rem;
+  color: var(--muted);
+}
+
+.status-grid strong {
+  display: block;
+  margin-top: 2px;
+  font-size: 1rem;
+}
+
+ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+li + li {
+  margin-top: 8px;
+}
+
+code {
+  font-family: Consolas, "Courier New", monospace;
+}
+
+.muted {
+  margin: 0;
+  color: var(--muted);
+}
+
+.error {
+  margin: 0;
+  color: var(--warn);
+  font-weight: 600;
+}
+
+@media (max-width: 640px) {
+  .app {
+    padding-top: 28px;
+  }
+}
