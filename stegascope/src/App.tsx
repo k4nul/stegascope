@@ -90,6 +90,26 @@ function App() {
     setActiveTabId(id);
   };
 
+  const handleDeleteTab = (tabId: number) => {
+    setTabs((prev) => {
+      if (prev.length === 1) {
+        return prev;
+      }
+
+      const deleteIndex = prev.findIndex((tab) => tab.id === tabId);
+      const nextTabs = prev.filter((tab) => tab.id !== tabId);
+
+      if (activeTabId === tabId) {
+        const fallbackTab = nextTabs[Math.max(0, deleteIndex - 1)] ?? nextTabs[0];
+        if (fallbackTab) {
+          setActiveTabId(fallbackTab.id);
+        }
+      }
+
+      return nextTabs;
+    });
+  };
+
   return (
     <main className="app">
       <header className="hero">
@@ -102,14 +122,29 @@ function App() {
 
       <section className="tabs">
         {tabs.map((tab) => (
-          <button
+          <div
             key={tab.id}
-            className={`tab ${tab.id === activeTabId ? "active" : ""}`}
-            type="button"
-            onClick={() => setActiveTabId(tab.id)}
+            className={`tab-item ${tab.id === activeTabId ? "active" : ""}`}
           >
-            {tab.title}
-          </button>
+            <button
+              className={`tab ${tab.id === activeTabId ? "active" : ""}`}
+              type="button"
+              onClick={() => setActiveTabId(tab.id)}
+            >
+              {tab.title}
+            </button>
+            {tabs.length > 1 && (
+              <button
+                className="tab-close"
+                type="button"
+                onClick={() => handleDeleteTab(tab.id)}
+                aria-label={`Delete ${tab.title}`}
+                title="Delete tab"
+              >
+                x
+              </button>
+            )}
+          </div>
         ))}
         <button className="tab add-tab" type="button" onClick={handleNewTab}>
           + New Tab
@@ -210,3 +245,4 @@ function App() {
 }
 
 export default App;
+
