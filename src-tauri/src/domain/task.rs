@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
 
-use crate::domain::{ExtractedFile, FileAnalyzer, FileLoader, LoaderError};
+use crate::domain::{ExtractedFile, ExtractedPayload, FileAnalyzer, FileLoader, LoaderError};
 
 #[derive(Debug)]
 pub struct Task {
@@ -11,6 +11,7 @@ pub struct Task {
     pub investigator_name: String,
     loader: Option<Box<dyn FileLoader>>,
     extracted_files: Vec<ExtractedFile>,
+    extracted_payloads: Vec<ExtractedPayload>,
 }
 
 impl Task {
@@ -27,6 +28,7 @@ impl Task {
             investigator_name: investigator_name.into(),
             loader: None,
             extracted_files: Vec::new(),
+            extracted_payloads: Vec::new(),
         }
     }
 
@@ -42,11 +44,32 @@ impl Task {
         &self.extracted_files
     }
 
+    pub fn extracted_payloads(&self) -> &[ExtractedPayload] {
+        &self.extracted_payloads
+    }
+
     pub fn collect_extracted_files(
         &mut self,
         files: impl IntoIterator<Item = ExtractedFile>,
     ) -> &[ExtractedFile] {
         self.extracted_files.extend(files);
+        &self.extracted_files
+    }
+
+    pub fn clear_extracted_files(&mut self) {
+        self.extracted_files.clear();
+        self.extracted_payloads.clear();
+    }
+
+    pub fn replace_extracted_payloads(
+        &mut self,
+        payloads: Vec<ExtractedPayload>,
+    ) -> &[ExtractedFile] {
+        self.extracted_files = payloads
+            .iter()
+            .map(|payload| payload.file.clone())
+            .collect();
+        self.extracted_payloads = payloads;
         &self.extracted_files
     }
 
@@ -60,6 +83,7 @@ impl Task {
             .map_err(TaskError::Loader)?;
 
         for outcome in outcomes {
+            self.extracted_payloads.extend(outcome.extracted_payloads);
             self.collect_extracted_files(outcome.extracted_files);
         }
 
