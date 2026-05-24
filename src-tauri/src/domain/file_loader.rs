@@ -86,13 +86,15 @@ pub trait FileLoader: std::fmt::Debug + Send + Sync {
 #[serde(rename_all = "camelCase")]
 pub struct ImageLoader {
     pub base: BaseFileLoader,
+    pub bytes: Vec<u8>,
 }
 
 impl ImageLoader {
-    pub fn new(media_info: MediaFileInfo) -> Self {
+    pub fn new(media_info: MediaFileInfo, bytes: Vec<u8>) -> Self {
         let file_name = media_info.file_name.clone();
         Self {
             base: BaseFileLoader::new(file_name, media_info),
+            bytes,
         }
     }
 }
@@ -103,7 +105,10 @@ impl FileLoader for ImageLoader {
     }
 
     fn load(&self) -> Result<LoadedMedia, LoaderError> {
-        Ok(LoadedMedia::empty(self.base.media_info.clone()))
+        Ok(LoadedMedia {
+            source: self.base.media_info.clone(),
+            bytes: self.bytes.clone(),
+        })
     }
 }
 
@@ -111,13 +116,15 @@ impl FileLoader for ImageLoader {
 #[serde(rename_all = "camelCase")]
 pub struct VideoLoader {
     pub base: BaseFileLoader,
+    pub bytes: Vec<u8>,
 }
 
 impl VideoLoader {
-    pub fn new(media_info: MediaFileInfo) -> Self {
+    pub fn new(media_info: MediaFileInfo, bytes: Vec<u8>) -> Self {
         let file_name = media_info.file_name.clone();
         Self {
             base: BaseFileLoader::new(file_name, media_info),
+            bytes,
         }
     }
 }
@@ -128,7 +135,10 @@ impl FileLoader for VideoLoader {
     }
 
     fn load(&self) -> Result<LoadedMedia, LoaderError> {
-        Ok(LoadedMedia::empty(self.base.media_info.clone()))
+        Ok(LoadedMedia {
+            source: self.base.media_info.clone(),
+            bytes: self.bytes.clone(),
+        })
     }
 }
 
@@ -136,13 +146,15 @@ impl FileLoader for VideoLoader {
 #[serde(rename_all = "camelCase")]
 pub struct AudioLoader {
     pub base: BaseFileLoader,
+    pub bytes: Vec<u8>,
 }
 
 impl AudioLoader {
-    pub fn new(media_info: MediaFileInfo) -> Self {
+    pub fn new(media_info: MediaFileInfo, bytes: Vec<u8>) -> Self {
         let file_name = media_info.file_name.clone();
         Self {
             base: BaseFileLoader::new(file_name, media_info),
+            bytes,
         }
     }
 }
@@ -153,6 +165,30 @@ impl FileLoader for AudioLoader {
     }
 
     fn load(&self) -> Result<LoadedMedia, LoaderError> {
-        Ok(LoadedMedia::empty(self.base.media_info.clone()))
+        Ok(LoadedMedia {
+            source: self.base.media_info.clone(),
+            bytes: self.bytes.clone(),
+        })
     }
+}
+
+pub fn create_loader(
+    media_info: MediaFileInfo,
+    bytes: Vec<u8>,
+) -> Result<Box<dyn FileLoader>, LoaderError> {
+    let file_type = media_info.file_type.to_ascii_lowercase();
+
+    if file_type.starts_with("image/") {
+        return Ok(Box::new(ImageLoader::new(media_info, bytes)));
+    }
+
+    if file_type.starts_with("audio/") {
+        return Ok(Box::new(AudioLoader::new(media_info, bytes)));
+    }
+
+    if file_type.starts_with("video/") {
+        return Ok(Box::new(VideoLoader::new(media_info, bytes)));
+    }
+
+    Err(LoaderError::UnsupportedMediaType(file_type))
 }

@@ -4,10 +4,14 @@ pub mod file_loader;
 pub mod media_file;
 pub mod task;
 
-pub use analyzer::{AnalysisError, AnalysisOutcome, BaseFileAnalyzer, FileAnalyzer, LoadedMedia};
-pub use extracted_file::{ExtractedFile, SuspiciousLevel};
+pub use analyzer::{
+    default_analyzers, extract_payload_candidates, finalize_extracted_payloads, AnalysisError,
+    AnalysisOutcome, BaseFileAnalyzer, EmbeddedSignatureAnalyzer, ExtractedPayload, FileAnalyzer,
+    LoadedMedia, Lsb2bppAnalyzer, LsbAnalyzer, MetadataAnalyzer, PayloadSource,
+};
+pub use extracted_file::{ExtractedFile, FileSignature, SuspiciousLevel, ValidationStatus};
 pub use file_loader::{
-    AudioLoader, BaseFileLoader, FileLoader, ImageLoader, LoaderError, VideoLoader,
+    create_loader, AudioLoader, BaseFileLoader, FileLoader, ImageLoader, LoaderError, VideoLoader,
 };
 pub use media_file::MediaFileInfo;
 pub use task::{Task, TaskError};
