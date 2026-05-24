@@ -1,75 +1,128 @@
 import { useMemo, useRef, useState } from "react";
+import { save } from "@tauri-apps/plugin-dialog";
 import {
-  createAnalysisJob,
-  downloadSuspiciousFile as downloadSuspiciousFileApi,
-  getAnalysisJobStatus,
-  getAnalysisResult,
+  analyzeTask,
+  attachMediaFile,
+  createTask,
+  downloadExtractedFile,
+  getExtractedFiles,
+  type AnalysisResultResponse,
+  type ExtractedFile,
+  type MediaFileInfo,
 } from "./api/analysis";
 import "./App.css";
 
-type AnalysisPhase = "idle" | "ready" | "loading" | "done" | "failed";
+type TaskPhase =
+  | "draft"
+  | "creating"
+  | "ready"
+  | "uploading"
+  | "analyzing"
+  | "done"
+  | "failed";
 
-type AnalysisResult = {
-  confidence: number;
-  suspiciousRegions: number;
-  note: string;
-  completedAt: string;
-  suspiciousFiles: string[];
-};
+type TaskFormField = "caseNumber" | "caseName" | "investigatorName" | "date";
 
 type AnalysisTab = {
   id: number;
   title: string;
-  fileName: string | null;
-  selectedFile: File | null;
-  jobId: string | null;
-  progress: number | null;
-  phase: AnalysisPhase;
+  taskId: string | null;
+  caseNumber: string;
+  caseName: string;
+  investigatorName: string;
+  date: string;
+  mediaFile: MediaFileInfo | null;
+  phase: TaskPhase;
   error: string | null;
-  result: AnalysisResult | null;
+  downloadPath: string | null;
+  result: AnalysisResultResponse | null;
+  extractedFiles: ExtractedFile[];
+};
+
+const todayForInput = () => {
+  const date = new Date();
+  date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
+  return date.toISOString().slice(0, 10);
 };
 
 const createTab = (id: number): AnalysisTab => ({
   id,
   title: `Task ${id}`,
-  fileName: null,
-  selectedFile: null,
-  jobId: null,
-  progress: null,
-  phase: "idle",
+  taskId: null,
+  caseNumber: "",
+  caseName: "",
+  investigatorName: "",
+  date: todayForInput(),
+  mediaFile: null,
+  phase: "draft",
   error: null,
+  downloadPath: null,
   result: null,
+  extractedFiles: [],
 });
 
-const sleep = async (ms: number) => {
-  await new Promise((resolve) => setTimeout(resolve, ms));
+const truncateTitle = (title: string) =>
+  title.length > 22 ? `${title.slice(0, 22)}...` : title;
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) {
+    return `${bytes} B`;
+  }
+
+  const units = ["KB", "MB", "GB", "TB"];
+  let value = bytes / 1024;
+  let unitIndex = 0;
+
+  while (value >= 1024 && unitIndex < units.length - 1) {
+    value /= 1024;
+    unitIndex += 1;
+  }
+
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 };
 
-const mockAnalyze = async (): Promise<AnalysisResult> => {
-  await sleep(1800);
-  const confidence = 0.72 + Math.random() * 0.22;
-  const suspiciousRegions = Math.floor(2 + Math.random() * 5);
+const formatCompletedAt = (value: string) => {
+  if (!value.startsWith("unix:")) {
+    return value;
+  }
 
-  return {
-    confidence,
-    suspiciousRegions,
-    note:
-      confidence > 0.9
-        ? "High probability of steganographic payload."
-        : "Potential hidden payload detected. Additional checks are recommended.",
-    completedAt: new Date().toLocaleString(),
-    suspiciousFiles: [
-      "payload_candidate_01.bin",
-      "embedded_stream_alpha.dat",
-      "metadata_fragment_hidden.txt",
-    ],
-  };
+  const seconds = Number(value.slice("unix:".length));
+  if (!Number.isFinite(seconds)) {
+    return value;
+  }
+
+  return new Date(seconds * 1000).toLocaleString();
+};
+
+const defaultSaveName = (fileName: string) => {
+  const sanitized = fileName.replace(/[\\/:*?"<>|]/g, "_").trim();
+  return sanitized || "extracted_payload";
+};
+
+const extensionFromFile = (file: ExtractedFile) => {
+  if (file.fileSignature.extension) {
+    return file.fileSignature.extension;
+  }
+
+  const nameExtension = file.fileName.split(".").pop()?.trim().toLowerCase();
+  if (nameExtension && nameExtension !== file.fileName.toLowerCase()) {
+    return nameExtension.replace(/[^a-z0-9]/g, "");
+  }
+
+  return null;
+};
+
+const saveFiltersFor = (file: ExtractedFile) => {
+  const extension = extensionFromFile(file);
+
+  return extension
+    ? [{ name: `${extension.toUpperCase()} file`, extensions: [extension] }]
+    : [];
 };
 
 function App() {
   const [tabs, setTabs] = useState<AnalysisTab[]>([createTab(1)]);
   const [activeTabId, setActiveTabId] = useState<number>(1);
-  const [showSuspiciousFiles, setShowSuspiciousFiles] = useState(false);
   const nextTabIdRef = useRef(2);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -78,105 +131,159 @@ function App() {
     [tabs, activeTabId],
   );
 
+  const canCreateTask = Boolean(
+    activeTab?.caseNumber.trim() &&
+      activeTab.caseName.trim() &&
+      activeTab.investigatorName.trim() &&
+      activeTab.date.trim() &&
+      !activeTab.taskId &&
+      activeTab.phase !== "creating",
+  );
+
   const patchTab = (tabId: number, patch: Partial<AnalysisTab>) => {
     setTabs((prev) =>
       prev.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
     );
   };
 
-  const handleFileSelected = (file: File) => {
-    if (!activeTab) {
+  const handleTaskFieldChange = (field: TaskFormField, value: string) => {
+    if (!activeTab || activeTab.taskId) {
       return;
     }
 
-    patchTab(activeTab.id, {
-      fileName: file.name,
-      selectedFile: file,
-      phase: "ready",
-      progress: null,
-      error: null,
-      jobId: null,
-      result: null,
-      title: file.name.length > 18 ? `${file.name.slice(0, 18)}...` : file.name,
-    });
-    setShowSuspiciousFiles(false);
+    patchTab(activeTab.id, { [field]: value });
   };
 
-  const handleAnalyze = async () => {
-    if (!activeTab || !activeTab.selectedFile || activeTab.phase === "loading") {
+  const handleCreateTask = async () => {
+    if (!activeTab || !canCreateTask) {
+      return;
+    }
+
+    patchTab(activeTab.id, { phase: "creating", error: null });
+
+    try {
+      const task = await createTask({
+        caseNumber: activeTab.caseNumber,
+        caseName: activeTab.caseName,
+        investigatorName: activeTab.investigatorName,
+        date: activeTab.date,
+      });
+
+      patchTab(activeTab.id, {
+        taskId: task.taskId,
+        title: truncateTitle(`${task.caseNumber} ${task.caseName}`),
+        caseNumber: task.caseNumber,
+        caseName: task.caseName,
+        investigatorName: task.investigatorName,
+        date: task.date,
+        mediaFile: task.mediaFile,
+        extractedFiles: task.extractedFiles,
+        result: null,
+        downloadPath: null,
+        phase: "ready",
+        error: null,
+      });
+    } catch (error) {
+      patchTab(activeTab.id, {
+        phase: "draft",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleFileSelected = async (file: File) => {
+    if (!activeTab?.taskId || activeTab.phase === "uploading") {
       return;
     }
 
     patchTab(activeTab.id, {
-      phase: "loading",
-      result: null,
+      phase: "uploading",
       error: null,
-      progress: 0,
-      jobId: null,
+      downloadPath: null,
+      mediaFile: null,
+      result: null,
+      extractedFiles: [],
     });
-    setShowSuspiciousFiles(false);
 
     try {
-      const { jobId } = await createAnalysisJob(activeTab.selectedFile);
-      patchTab(activeTab.id, { jobId, progress: 5 });
+      const task = await attachMediaFile(activeTab.taskId, file);
 
-      let status: Awaited<ReturnType<typeof getAnalysisJobStatus>>;
-      while (true) {
-        status = await getAnalysisJobStatus(jobId);
-
-        if (status.status === "failed") {
-          throw new Error(status.error ?? "Analysis failed in backend.");
-        }
-
-        if (status.status === "done") {
-          break;
-        }
-
-        patchTab(activeTab.id, {
-          progress: typeof status.progress === "number" ? status.progress : null,
-        });
-
-        await sleep(900);
-      }
-
-      const result = await getAnalysisResult(jobId);
       patchTab(activeTab.id, {
-        phase: "done",
-        progress: 100,
+        mediaFile: task.mediaFile,
+        extractedFiles: task.extractedFiles,
+        phase: "ready",
         error: null,
-        result: {
-          confidence: result.confidence,
-          suspiciousRegions: result.suspiciousRegions,
-          note: result.note,
-          completedAt: result.completedAt ?? new Date().toLocaleString(),
-          suspiciousFiles: result.suspiciousFiles ?? [],
-        },
       });
     } catch (error) {
       patchTab(activeTab.id, {
         phase: "failed",
         error: error instanceof Error ? error.message : String(error),
-        progress: null,
       });
     }
   };
 
-  const handleTestLoading = async () => {
-    if (!activeTab || activeTab.phase === "loading") {
+  const handleAnalyze = async () => {
+    if (!activeTab?.taskId || !activeTab.mediaFile || activeTab.phase === "analyzing") {
       return;
     }
 
     patchTab(activeTab.id, {
-      fileName: activeTab.fileName ?? "test-sample.png",
-      phase: "loading",
+      phase: "analyzing",
       result: null,
       error: null,
-      progress: null,
-      jobId: null,
+      downloadPath: null,
+      extractedFiles: [],
     });
-    setShowSuspiciousFiles(false);
-    const result = await mockAnalyze();
-    patchTab(activeTab.id, { phase: "done", result, progress: 100 });
+
+    try {
+      const result = await analyzeTask(activeTab.taskId);
+      const extractedFiles = await getExtractedFiles(activeTab.taskId);
+
+      patchTab(activeTab.id, {
+        phase: "done",
+        result: { ...result, extractedFiles },
+        extractedFiles,
+        error: null,
+      });
+    } catch (error) {
+      patchTab(activeTab.id, {
+        phase: "failed",
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
+  };
+
+  const handleDownloadExtractedFile = async (file: ExtractedFile) => {
+    if (!activeTab?.taskId) {
+      return;
+    }
+
+    try {
+      const filters = saveFiltersFor(file);
+      const targetPath = await save({
+        defaultPath: defaultSaveName(file.fileName),
+        ...(filters.length > 0 ? { filters } : {}),
+      });
+
+      if (!targetPath) {
+        return;
+      }
+
+      const downloaded = await downloadExtractedFile(
+        activeTab.taskId,
+        file.fileName,
+        file.analyzerName,
+        targetPath,
+      );
+      patchTab(activeTab.id, {
+        downloadPath: downloaded.savedPath,
+        error: null,
+      });
+    } catch (error) {
+      patchTab(activeTab.id, {
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
   };
 
   const handleNewTab = () => {
@@ -185,7 +292,6 @@ function App() {
 
     setTabs((prev) => [...prev, createTab(id)]);
     setActiveTabId(id);
-    setShowSuspiciousFiles(false);
   };
 
   const handleDeleteTab = (tabId: number) => {
@@ -201,36 +307,11 @@ function App() {
         const fallbackTab = nextTabs[Math.max(0, deleteIndex - 1)] ?? nextTabs[0];
         if (fallbackTab) {
           setActiveTabId(fallbackTab.id);
-          setShowSuspiciousFiles(false);
         }
       }
 
       return nextTabs;
     });
-  };
-
-  const handleDownloadSuspiciousFile = async (fileName: string) => {
-    if (!activeTab?.jobId) {
-      return;
-    }
-
-    try {
-      await downloadSuspiciousFileApi(activeTab.jobId, fileName);
-    } catch (error) {
-      patchTab(activeTab.id, {
-        error: error instanceof Error ? error.message : String(error),
-      });
-    }
-  };
-
-  const handleDownloadAllSuspiciousFiles = async () => {
-    if (!activeTab?.result) {
-      return;
-    }
-
-    for (const fileName of activeTab.result.suspiciousFiles) {
-      await handleDownloadSuspiciousFile(fileName);
-    }
   };
 
   return (
@@ -239,14 +320,11 @@ function App() {
         <p className="eyebrow">StegaScope</p>
         <h1>Steganalysis Workspace</h1>
         <p className="subtitle">
-          Upload a target file, run analysis, and manage multiple tasks in tabs.
+          Create a case task, attach a media file, run analyzers, and review extracted files.
         </p>
-        <button className="test-button" type="button" onClick={handleTestLoading}>
-          Test Loading View
-        </button>
       </header>
 
-      <section className="tabs">
+      <section className="tabs" aria-label="Task tabs">
         {tabs.map((tab) => (
           <div
             key={tab.id}
@@ -255,10 +333,7 @@ function App() {
             <button
               className={`tab ${tab.id === activeTabId ? "active" : ""}`}
               type="button"
-              onClick={() => {
-                setActiveTabId(tab.id);
-                setShowSuspiciousFiles(false);
-              }}
+              onClick={() => setActiveTabId(tab.id)}
             >
               {tab.title}
             </button>
@@ -276,89 +351,177 @@ function App() {
           </div>
         ))}
         <button className="tab add-tab" type="button" onClick={handleNewTab}>
-          + New Tab
+          + New Task
         </button>
       </section>
 
       {activeTab && (
         <section className="panel workspace">
-          {activeTab.phase === "loading" ? (
+          {activeTab.phase === "analyzing" ? (
             <section className="analysis-loading-page" aria-live="polite">
               <div className="loading-visual" aria-hidden="true">
                 <div className="scan-frame">
                   <div className="scan-surface" />
                   <div className="scan-line" />
-                  <div className="drift-orb orb-1" />
-                  <div className="drift-orb orb-2" />
-                  <div className="drift-orb orb-3" />
                 </div>
                 <div className="probe" />
               </div>
-              <h2>Analyzing Target...</h2>
+              <h2>Running Analyzers...</h2>
               <p className="loading-copy">
-                Pattern signatures and hidden payload traces are being scanned.
+                File loader output is being checked by the registered analyzer set.
               </p>
               <p className="loading-file">
-                Current file: <strong>{activeTab.fileName ?? "Unknown"}</strong>
-              </p>
-              <p className="loading-progress">
-                Progress: {typeof activeTab.progress === "number" ? `${activeTab.progress}%` : "Preparing..."}
+                Current file: <strong>{activeTab.mediaFile?.fileName ?? "Unknown"}</strong>
               </p>
             </section>
           ) : (
             <>
-              <div
-                className="dropzone"
-                onDragOver={(event) => event.preventDefault()}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  const file = event.dataTransfer.files?.[0];
-                  if (file) {
-                    handleFileSelected(file);
-                  }
-                }}
-                onClick={() => fileInputRef.current?.click()}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter" || event.key === " ") {
-                    event.preventDefault();
-                    fileInputRef.current?.click();
-                  }
-                }}
-              >
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  hidden
-                  onChange={(event) => {
-                    const file = event.target.files?.[0];
-                    if (file) {
-                      handleFileSelected(file);
-                    }
-                  }}
-                />
-                <p className="drop-title">Drop analysis target file here</p>
-                <p className="muted">or click to select a file from your device</p>
-                {activeTab.fileName && (
-                  <p className="selected-file">
-                    Selected file: <strong>{activeTab.fileName}</strong>
-                  </p>
-                )}
-              </div>
+              <section className="task-form" aria-labelledby="task-form-heading">
+                <div className="section-heading">
+                  <p className="eyebrow">Task</p>
+                  <h2 id="task-form-heading">Case Details</h2>
+                  {activeTab.taskId && <span className="status-pill">Created</span>}
+                </div>
 
-              <div className="actions">
-                <button
-                  className="analyze"
-                  type="button"
-                  onClick={handleAnalyze}
-                  disabled={!activeTab.selectedFile}
-                >
-                  Start Analysis
-                </button>
-              </div>
+                <div className="form-grid">
+                  <label>
+                    Case Number
+                    <input
+                      value={activeTab.caseNumber}
+                      onChange={(event) =>
+                        handleTaskFieldChange("caseNumber", event.target.value)
+                      }
+                      disabled={Boolean(activeTab.taskId)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Case Name
+                    <input
+                      value={activeTab.caseName}
+                      onChange={(event) =>
+                        handleTaskFieldChange("caseName", event.target.value)
+                      }
+                      disabled={Boolean(activeTab.taskId)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Investigator Name
+                    <input
+                      value={activeTab.investigatorName}
+                      onChange={(event) =>
+                        handleTaskFieldChange("investigatorName", event.target.value)
+                      }
+                      disabled={Boolean(activeTab.taskId)}
+                      required
+                    />
+                  </label>
+                  <label>
+                    Date
+                    <input
+                      type="date"
+                      value={activeTab.date}
+                      onChange={(event) => handleTaskFieldChange("date", event.target.value)}
+                      disabled={Boolean(activeTab.taskId)}
+                      required
+                    />
+                  </label>
+                </div>
+
+                <div className="actions">
+                  <button
+                    className="analyze"
+                    type="button"
+                    onClick={handleCreateTask}
+                    disabled={!canCreateTask}
+                  >
+                    {activeTab.phase === "creating" ? "Creating..." : "Create Task"}
+                  </button>
+                </div>
+              </section>
+
+              {activeTab.taskId && (
+                <section className="media-section" aria-labelledby="media-heading">
+                  <div className="section-heading">
+                    <p className="eyebrow">Media</p>
+                    <h2 id="media-heading">File Loader</h2>
+                    {activeTab.mediaFile && (
+                      <span className="status-pill">Loaded</span>
+                    )}
+                  </div>
+
+                  <div
+                    className={`dropzone ${
+                      activeTab.phase === "uploading" ? "busy" : ""
+                    }`}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const file = event.dataTransfer.files?.[0];
+                      if (file) {
+                        void handleFileSelected(file);
+                      }
+                    }}
+                    onClick={() => fileInputRef.current?.click()}
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(event) => {
+                      if (event.key === "Enter" || event.key === " ") {
+                        event.preventDefault();
+                        fileInputRef.current?.click();
+                      }
+                    }}
+                  >
+                    <input
+                      ref={fileInputRef}
+                      type="file"
+                      accept="image/*,audio/*,video/*"
+                      hidden
+                      onChange={(event) => {
+                        const file = event.target.files?.[0];
+                        event.target.value = "";
+                        if (file) {
+                          void handleFileSelected(file);
+                        }
+                      }}
+                    />
+                    <p className="drop-title">
+                      {activeTab.phase === "uploading"
+                        ? "Loading media file..."
+                        : "Drop image, audio, or video file here"}
+                    </p>
+                    <p className="muted">or click to select a file from your device</p>
+                    {activeTab.mediaFile && (
+                      <div className="selected-file">
+                        <strong>{activeTab.mediaFile.fileName}</strong>
+                        <span>{activeTab.mediaFile.fileType}</span>
+                        <span>{formatFileSize(activeTab.mediaFile.fileSizeBytes)}</span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="actions">
+                    <button
+                      className="analyze"
+                      type="button"
+                      onClick={handleAnalyze}
+                      disabled={
+                        !activeTab.mediaFile || activeTab.phase === "uploading"
+                      }
+                    >
+                      Start Analysis
+                    </button>
+                  </div>
+                </section>
+              )}
 
               {activeTab.error && <p className="error-banner">{activeTab.error}</p>}
+              {activeTab.downloadPath && (
+                <p className="success-banner">
+                  Saved extracted file: <strong>{activeTab.downloadPath}</strong>
+                </p>
+              )}
 
               {activeTab.phase === "done" && activeTab.result && (
                 <article className="result">
@@ -375,48 +538,52 @@ function App() {
                     </div>
                     <div>
                       <span>Completed At</span>
-                      <strong>{activeTab.result.completedAt}</strong>
+                      <strong>{formatCompletedAt(activeTab.result.completedAt)}</strong>
                     </div>
                   </div>
-                  <div className="result-actions">
-                    <button
-                      className="inspect-button"
-                      type="button"
-                      onClick={() => setShowSuspiciousFiles((prev) => !prev)}
-                    >
-                      {showSuspiciousFiles
-                        ? "Hide Suspicious Files"
-                        : "Inspect Suspicious Files"}
-                    </button>
-                  </div>
-                  {showSuspiciousFiles && (
-                    <section className="suspicious-files">
-                      <div className="suspicious-files-head">
-                        <h3>Suspicious File Candidates</h3>
-                        <button
-                          className="download-all"
-                          type="button"
-                          onClick={handleDownloadAllSuspiciousFiles}
-                        >
-                          Download All
-                        </button>
-                      </div>
+
+                  <section className="suspicious-files">
+                    <div className="suspicious-files-head">
+                      <h3>Extracted Files</h3>
+                      <span>{activeTab.extractedFiles.length} item(s)</span>
+                    </div>
+                    {activeTab.extractedFiles.length > 0 ? (
                       <ul>
-                        {activeTab.result.suspiciousFiles.map((file) => (
-                          <li key={file}>
-                            <span>{file}</span>
+                        {activeTab.extractedFiles.map((file) => (
+                          <li key={`${file.analyzerName}-${file.fileName}-${file.fileType}`}>
+                            <span className="file-primary">
+                              <strong>{file.fileName}</strong>
+                              <small>{file.fileType}</small>
+                              <small>Analyzer: {file.analyzerName}</small>
+                              <small>
+                                Validation: {file.validationStatus} - {file.validationNote}
+                              </small>
+                              <small>
+                                Signature: {file.fileSignature.label}
+                                {file.fileSignature.isKnown
+                                  ? ` (.${file.fileSignature.extension})`
+                                  : " (extension unknown)"}
+                              </small>
+                              <small>Header: {file.fileSignature.headerHex}</small>
+                            </span>
+                            <span className={`level level-${file.suspiciousLevel}`}>
+                              {file.suspiciousLevel}
+                            </span>
+                            <span>{formatFileSize(file.fileSizeBytes)}</span>
                             <button
                               className="download-one"
                               type="button"
-                              onClick={() => handleDownloadSuspiciousFile(file)}
+                              onClick={() => void handleDownloadExtractedFile(file)}
                             >
                               Download
                             </button>
                           </li>
                         ))}
                       </ul>
-                    </section>
-                  )}
+                    ) : (
+                      <p className="empty-state">No extracted files were found.</p>
+                    )}
+                  </section>
                 </article>
               )}
             </>
