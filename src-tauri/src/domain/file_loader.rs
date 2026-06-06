@@ -172,6 +172,60 @@ impl FileLoader for AudioLoader {
     }
 }
 
+pub trait FileLoaderFactory: std::fmt::Debug + Send + Sync {
+    fn supports(&self, media_info: &MediaFileInfo) -> bool;
+
+    fn create(&self, media_info: MediaFileInfo, bytes: Vec<u8>) -> Box<dyn FileLoader>;
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct ImageLoaderFactory;
+
+impl FileLoaderFactory for ImageLoaderFactory {
+    fn supports(&self, media_info: &MediaFileInfo) -> bool {
+        media_info
+            .file_type
+            .to_ascii_lowercase()
+            .starts_with("image/")
+    }
+
+    fn create(&self, media_info: MediaFileInfo, bytes: Vec<u8>) -> Box<dyn FileLoader> {
+        Box::new(ImageLoader::new(media_info, bytes))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct AudioLoaderFactory;
+
+impl FileLoaderFactory for AudioLoaderFactory {
+    fn supports(&self, media_info: &MediaFileInfo) -> bool {
+        media_info
+            .file_type
+            .to_ascii_lowercase()
+            .starts_with("audio/")
+    }
+
+    fn create(&self, media_info: MediaFileInfo, bytes: Vec<u8>) -> Box<dyn FileLoader> {
+        Box::new(AudioLoader::new(media_info, bytes))
+    }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub struct VideoLoaderFactory;
+
+impl FileLoaderFactory for VideoLoaderFactory {
+    fn supports(&self, media_info: &MediaFileInfo) -> bool {
+        media_info
+            .file_type
+            .to_ascii_lowercase()
+            .starts_with("video/")
+    }
+
+    fn create(&self, media_info: MediaFileInfo, bytes: Vec<u8>) -> Box<dyn FileLoader> {
+        Box::new(VideoLoader::new(media_info, bytes))
+    }
+}
+
 pub fn create_loader(
     media_info: MediaFileInfo,
     bytes: Vec<u8>,
