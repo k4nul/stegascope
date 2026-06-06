@@ -226,23 +226,35 @@ impl FileLoaderFactory for VideoLoaderFactory {
     }
 }
 
+#[derive(Clone, Copy, Debug, Default)]
+pub struct MediaLoaderFactory;
+
+impl MediaLoaderFactory {
+    pub fn create(
+        &self,
+        media_info: MediaFileInfo,
+        bytes: Vec<u8>,
+    ) -> Result<Box<dyn FileLoader>, LoaderError> {
+        let file_type = media_info.file_type.to_ascii_lowercase();
+        let factories: [&dyn FileLoaderFactory; 3] = [
+            &ImageLoaderFactory,
+            &AudioLoaderFactory,
+            &VideoLoaderFactory,
+        ];
+
+        for factory in factories {
+            if factory.supports(&media_info) {
+                return Ok(factory.create(media_info, bytes));
+            }
+        }
+
+        Err(LoaderError::UnsupportedMediaType(file_type))
+    }
+}
+
 pub fn create_loader(
     media_info: MediaFileInfo,
     bytes: Vec<u8>,
 ) -> Result<Box<dyn FileLoader>, LoaderError> {
-    let file_type = media_info.file_type.to_ascii_lowercase();
-
-    if file_type.starts_with("image/") {
-        return Ok(Box::new(ImageLoader::new(media_info, bytes)));
-    }
-
-    if file_type.starts_with("audio/") {
-        return Ok(Box::new(AudioLoader::new(media_info, bytes)));
-    }
-
-    if file_type.starts_with("video/") {
-        return Ok(Box::new(VideoLoader::new(media_info, bytes)));
-    }
-
-    Err(LoaderError::UnsupportedMediaType(file_type))
+    MediaLoaderFactory.create(media_info, bytes)
 }
