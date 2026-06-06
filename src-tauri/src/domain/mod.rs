@@ -11,7 +11,9 @@ pub use analyzer::{
 };
 pub use extracted_file::{ExtractedFile, FileSignature, SuspiciousLevel, ValidationStatus};
 pub use file_loader::{
-    create_loader, AudioLoader, BaseFileLoader, FileLoader, ImageLoader, LoaderError, VideoLoader,
+    create_loader, AudioLoader, AudioLoaderFactory, BaseFileLoader, FileLoader, FileLoaderFactory,
+    ImageLoader, ImageLoaderFactory, LoaderError, MediaLoaderFactory, VideoLoader,
+    VideoLoaderFactory,
 };
 pub use media_file::MediaFileInfo;
 pub use task::{Task, TaskError};
