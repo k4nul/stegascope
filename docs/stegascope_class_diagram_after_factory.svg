@@ -1,0 +1,211 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1512" height="790" viewBox="0 0 1512 790">
+  <defs>
+    <marker id="arrow-open" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto">
+      <path d="M1,1 L9,5 L1,9" fill="none" stroke="#f4f1f8" stroke-width="1.4"/>
+    </marker>
+    <marker id="triangle-open" viewBox="0 0 12 12" refX="1" refY="6" markerWidth="12" markerHeight="12" orient="auto">
+      <path d="M11,1 L1,6 L11,11 Z" fill="#17131c" stroke="#f4f1f8" stroke-width="1.2"/>
+    </marker>
+    <marker id="diamond-filled" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="14" markerHeight="14" orient="auto">
+      <path d="M1,7 L7,1 L13,7 L7,13 Z" fill="#f4f1f8" stroke="#f4f1f8" stroke-width="1.1"/>
+    </marker>
+    <marker id="diamond-open" viewBox="0 0 14 14" refX="1" refY="7" markerWidth="14" markerHeight="14" orient="auto">
+      <path d="M1,7 L7,1 L13,7 L7,13 Z" fill="#17131c" stroke="#f4f1f8" stroke-width="1.1"/>
+    </marker>
+    <style>
+      .bg { fill: #17131c; }
+      .box { fill: #17131c; stroke: #f4f1f8; stroke-width: 1; }
+      .sep { stroke: #f4f1f8; stroke-width: 1; }
+      .title { fill: #f4f1f8; font: 700 13px "Segoe UI", Arial, sans-serif; }
+      .text { fill: #f4f1f8; font: 600 12px "Segoe UI", Arial, sans-serif; }
+      .small { fill: #f4f1f8; font: 600 11px "Segoe UI", Arial, sans-serif; }
+      .line { fill: none; stroke: #f4f1f8; stroke-width: 1; }
+      .dash { fill: none; stroke: #f4f1f8; stroke-width: 1; stroke-dasharray: 4 4; }
+      .label { fill: #f4f1f8; font: 700 12px "Segoe UI", Arial, sans-serif; }
+    </style>
+  </defs>
+
+  <rect class="bg" width="1512" height="860"/>
+
+  <!-- Task -->
+  <g id="Task">
+    <rect class="box" x="215" y="5" width="215" height="216"/>
+    <line class="sep" x1="215" y1="31" x2="430" y2="31"/>
+    <line class="sep" x1="215" y1="137" x2="430" y2="137"/>
+    <text class="title" x="322.5" y="23" text-anchor="middle">Task</text>
+    <text class="text" x="221" y="54">+ case_number: string</text>
+    <text class="text" x="221" y="82">+ case_name: string</text>
+    <text class="text" x="221" y="110">+ date: string</text>
+    <text class="text" x="221" y="128">+ investigator_name: string</text>
+    <text class="text" x="221" y="160">+ set_loader(loader): void</text>
+    <text class="text" x="221" y="188">+ collect(files): void</text>
+    <text class="text" x="221" y="213">+ extracted_files(): ExtractedFile[]</text>
+  </g>
+
+  <!-- MediaFileInfo -->
+  <g id="MediaFileInfo">
+    <rect class="box" x="0" y="335" width="160" height="138"/>
+    <line class="sep" x1="0" y1="361" x2="160" y2="361"/>
+    <line class="sep" x1="0" y1="442" x2="160" y2="442"/>
+    <text class="title" x="80" y="353" text-anchor="middle">MediaFileInfo</text>
+    <text class="text" x="6" y="380">+ file_name: string</text>
+    <text class="text" x="6" y="407">+ file_size: string</text>
+    <text class="text" x="6" y="434">+ file_type: string</text>
+    <text class="text" x="6" y="465">+ describe(): MediaFileInfo</text>
+  </g>
+
+  <!-- FileLoader -->
+  <g id="FileLoader">
+    <rect class="box" x="247" y="335" width="266" height="106"/>
+    <line class="sep" x1="247" y1="375" x2="513" y2="375"/>
+    <line class="sep" x1="247" y1="405" x2="513" y2="405"/>
+    <text class="title" x="380" y="353" text-anchor="middle">&lt;&lt;interface&gt;&gt;</text>
+    <text class="title" x="380" y="368" text-anchor="middle">FileLoader</text>
+    <text class="text" x="253" y="394">+ file_name: string</text>
+    <text class="text" x="253" y="426">+ load(): LoadedMedia</text>
+  </g>
+
+  <!-- Loader classes -->
+  <g id="ImageLoader">
+    <rect class="box" x="80" y="535" width="160" height="60"/>
+    <line class="sep" x1="80" y1="562" x2="240" y2="562"/>
+    <text class="title" x="160" y="553" text-anchor="middle">ImageLoader</text>
+    <text class="text" x="86" y="580">+ media_type: image</text>
+  </g>
+  <g id="AudioLoader">
+    <rect class="box" x="285" y="535" width="160" height="60"/>
+    <line class="sep" x1="285" y1="562" x2="445" y2="562"/>
+    <text class="title" x="365" y="553" text-anchor="middle">AudioLoader</text>
+    <text class="text" x="291" y="580">+ media_type: audio</text>
+  </g>
+  <g id="VideoLoader">
+    <rect class="box" x="490" y="535" width="160" height="60"/>
+    <line class="sep" x1="490" y1="562" x2="650" y2="562"/>
+    <text class="title" x="570" y="553" text-anchor="middle">VideoLoader</text>
+    <text class="text" x="496" y="580">+ media_type: video</text>
+  </g>
+
+  <!-- Factory method addition -->
+  <g id="MediaLoaderFactory">
+    <rect class="box" x="550" y="75" width="230" height="94"/>
+    <line class="sep" x1="550" y1="116" x2="780" y2="116"/>
+    <text class="title" x="665" y="93" text-anchor="middle">&lt;&lt;Factory&gt;&gt;</text>
+    <text class="title" x="665" y="110" text-anchor="middle">MediaLoaderFactory</text>
+    <text class="small" x="557" y="140">+ create(info, bytes): FileLoader</text>
+  </g>
+  <g id="FileLoaderFactory">
+    <rect class="box" x="550" y="200" width="230" height="108"/>
+    <line class="sep" x1="550" y1="241" x2="780" y2="241"/>
+    <line class="sep" x1="550" y1="268" x2="780" y2="268"/>
+    <text class="title" x="665" y="218" text-anchor="middle">&lt;&lt;interface&gt;&gt;</text>
+    <text class="title" x="665" y="235" text-anchor="middle">FileLoaderFactory</text>
+    <text class="small" x="557" y="260">+ supports(info): bool</text>
+    <text class="small" x="557" y="289">+ create(info, bytes): FileLoader</text>
+  </g>
+  <g id="ImageLoaderFactory">
+    <rect class="box" x="825" y="80" width="185" height="52"/>
+    <text class="title" x="917.5" y="112" text-anchor="middle">ImageLoaderFactory</text>
+  </g>
+  <g id="AudioLoaderFactory">
+    <rect class="box" x="825" y="150" width="185" height="52"/>
+    <text class="title" x="917.5" y="182" text-anchor="middle">AudioLoaderFactory</text>
+  </g>
+  <g id="VideoLoaderFactory">
+    <rect class="box" x="825" y="220" width="185" height="52"/>
+    <text class="title" x="917.5" y="252" text-anchor="middle">VideoLoaderFactory</text>
+  </g>
+
+  <!-- FileAnalyzer -->
+  <g id="FileAnalyzer">
+    <rect class="box" x="930" y="341" width="260" height="146"/>
+    <line class="sep" x1="930" y1="397" x2="1190" y2="397"/>
+    <line class="sep" x1="930" y1="428" x2="1190" y2="428"/>
+    <text class="title" x="1060" y="359" text-anchor="middle">&lt;&lt;interface&gt;&gt;</text>
+    <text class="title" x="1060" y="374" text-anchor="middle">&lt;&lt;Strategy&gt;&gt;</text>
+    <text class="title" x="1060" y="389" text-anchor="middle">FileAnalyzer</text>
+    <text class="text" x="936" y="416">+ analyzer_name: string</text>
+    <text class="text" x="936" y="449">+ analyze(media): AnalysisOutcome</text>
+    <text class="text" x="936" y="477">+ extract_candidates(media): ExtractedFile[]</text>
+  </g>
+
+  <!-- ExtractedFile -->
+  <g id="ExtractedFile">
+    <rect class="box" x="1290" y="341" width="221" height="216"/>
+    <line class="sep" x1="1290" y1="367" x2="1511" y2="367"/>
+    <line class="sep" x1="1290" y1="501" x2="1511" y2="501"/>
+    <text class="title" x="1400.5" y="359" text-anchor="middle">ExtractedFile</text>
+    <text class="text" x="1297" y="385">+ suspicious_level: SuspiciousLevel</text>
+    <text class="text" x="1297" y="418">+ file_size: number</text>
+    <text class="text" x="1297" y="452">+ file_type: string</text>
+    <text class="text" x="1297" y="485">+ analyzer_name: string</text>
+    <text class="text" x="1297" y="520">+ file_signature: FileSignature</text>
+    <text class="text" x="1297" y="551">+ validation_status(): ValidationStatus</text>
+  </g>
+
+  <!-- Analyzers -->
+  <g id="LsbAnalyzer">
+    <rect class="box" x="700" y="685" width="160" height="76"/>
+    <line class="sep" x1="700" y1="729" x2="860" y2="729"/>
+    <text class="small" x="780" y="705" text-anchor="middle">&lt;&lt;ConcreteStrategy&gt;&gt;</text>
+    <text class="title" x="780" y="722" text-anchor="middle">LsbAnalyzer</text>
+    <text class="text" x="706" y="750">+ technique: lsb_1bpp</text>
+  </g>
+  <g id="EmbeddedSignatureAnalyzer">
+    <rect class="box" x="876" y="685" width="185" height="76"/>
+    <line class="sep" x1="876" y1="729" x2="1061" y2="729"/>
+    <text class="small" x="968.5" y="705" text-anchor="middle">&lt;&lt;ConcreteStrategy&gt;&gt;</text>
+    <text class="title" x="968.5" y="722" text-anchor="middle">EmbeddedSignatureAnalyzer</text>
+    <text class="text" x="882" y="750">+ technique: Signature</text>
+  </g>
+  <g id="MetadataAnalyzer">
+    <rect class="box" x="1080" y="685" width="160" height="76"/>
+    <line class="sep" x1="1080" y1="729" x2="1240" y2="729"/>
+    <text class="small" x="1160" y="705" text-anchor="middle">&lt;&lt;ConcreteStrategy&gt;&gt;</text>
+    <text class="title" x="1160" y="722" text-anchor="middle">MetadataAnalyzer</text>
+    <text class="text" x="1086" y="750">+ technique: metadata</text>
+  </g>
+  <g id="Lsb2bppAnalyzer">
+    <rect class="box" x="1260" y="685" width="160" height="76"/>
+    <line class="sep" x1="1260" y1="729" x2="1420" y2="729"/>
+    <text class="small" x="1340" y="705" text-anchor="middle">&lt;&lt;ConcreteStrategy&gt;&gt;</text>
+    <text class="title" x="1340" y="722" text-anchor="middle">Lsb2bppAnalyzer</text>
+    <text class="text" x="1266" y="750">+ technique: lsb_2bpp</text>
+  </g>
+
+  <!-- Relationships: original structure -->
+  <path class="line" d="M310,221 L310,243 L380,243 L380,335" marker-start="url(#diamond-filled)"/>
+  <text class="label" x="338" y="240">1</text>
+  <text class="label" x="390" y="304">0..1</text>
+
+  <path class="line" d="M247,353 L160,353" marker-start="url(#diamond-filled)" marker-end="url(#arrow-open)"/>
+  <text class="label" x="231" y="380">1</text>
+  <text class="label" x="173" y="381">1</text>
+
+  <path class="dash" d="M1190,397 L1290,397" marker-end="url(#arrow-open)"/>
+  <text class="label" x="1261" y="378">0..*</text>
+
+  <path class="line" d="M431,20 L1400,20 L1400,341" marker-start="url(#diamond-filled)" marker-end="url(#arrow-open)"/>
+  <text class="label" x="433" y="16">1</text>
+  <text class="label" x="1360" y="313">0..*</text>
+
+  <path class="dash" d="M160,535 L355,441" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M365,535 L365,441" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M570,535 L405,441" marker-end="url(#triangle-open)"/>
+
+  <path class="dash" d="M780,685 L1025,487" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M968,685 L1048,487" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M1160,685 L1073,487" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M1340,685 L1096,487" marker-end="url(#triangle-open)"/>
+
+  <!-- Relationships: Factory Method addition -->
+  <path class="line" d="M665,169 L665,200" marker-start="url(#diamond-filled)"/>
+  <text class="label" x="674" y="194">1..*</text>
+  <path class="dash" d="M550,254 L520,254 L520,372 L513,372" marker-end="url(#arrow-open)"/>
+  <text class="label" x="522" y="246">creates</text>
+  <path class="dash" d="M825,106 L780,226" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M825,176 L780,246" marker-end="url(#triangle-open)"/>
+  <path class="dash" d="M825,246 L780,266" marker-end="url(#triangle-open)"/>
+
+  <text class="small" x="550" y="63">Factory Method applied</text>
+  <text class="small" x="930" y="329">Strategy Pattern applied</text>
+</svg>
