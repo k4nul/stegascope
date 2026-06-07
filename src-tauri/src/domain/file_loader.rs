@@ -3,7 +3,7 @@ use std::fmt::{self, Display, Formatter};
 
 use serde::{Deserialize, Serialize};
 
-use crate::domain::{AnalysisError, AnalysisOutcome, FileAnalyzer, LoadedMedia, MediaFileInfo};
+use crate::domain::{LoadedMedia, MediaFileInfo};
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
@@ -27,7 +27,6 @@ pub enum LoaderError {
     InvalidPath(String),
     UnsupportedMediaType(String),
     ReadFailed(String),
-    AnalyzerFailure(String),
 }
 
 impl Display for LoaderError {
@@ -38,18 +37,11 @@ impl Display for LoaderError {
                 write!(f, "unsupported media type for loader: {file_type}")
             }
             Self::ReadFailed(message) => write!(f, "failed to read file: {message}"),
-            Self::AnalyzerFailure(message) => write!(f, "analyzer invocation failed: {message}"),
         }
     }
 }
 
 impl Error for LoaderError {}
-
-impl From<AnalysisError> for LoaderError {
-    fn from(value: AnalysisError) -> Self {
-        Self::AnalyzerFailure(value.to_string())
-    }
-}
 
 pub trait FileLoader: std::fmt::Debug + Send + Sync {
     fn base(&self) -> &BaseFileLoader;
@@ -62,23 +54,6 @@ pub trait FileLoader: std::fmt::Debug + Send + Sync {
 
     fn media_info(&self) -> &MediaFileInfo {
         &self.base().media_info
-    }
-
-    fn invoke_analyzer(&self, analyzer: &dyn FileAnalyzer) -> Result<AnalysisOutcome, LoaderError> {
-        let media = self.load()?;
-        analyzer.analyze(&media).map_err(LoaderError::from)
-    }
-
-    fn invoke_analyzers(
-        &self,
-        analyzers: &[Box<dyn FileAnalyzer>],
-    ) -> Result<Vec<AnalysisOutcome>, LoaderError> {
-        let media = self.load()?;
-
-        analyzers
-            .iter()
-            .map(|analyzer| analyzer.analyze(&media).map_err(LoaderError::from))
-            .collect()
     }
 }
 

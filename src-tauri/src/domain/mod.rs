@@ -16,4 +16,4 @@ pub use file_loader::{
     VideoLoaderFactory,
 };
 pub use media_file::MediaFileInfo;
-pub use task::{Task, TaskError};
+pub use task::Task;

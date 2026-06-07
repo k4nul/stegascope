@@ -1,7 +1,4 @@
-use std::error::Error;
-use std::fmt::{self, Display, Formatter};
-
-use crate::domain::{ExtractedFile, ExtractedPayload, FileAnalyzer, FileLoader, LoaderError};
+use crate::domain::{ExtractedFile, ExtractedPayload, FileLoader};
 
 #[derive(Debug)]
 pub struct Task {
@@ -72,38 +69,4 @@ impl Task {
         self.extracted_payloads = payloads;
         &self.extracted_files
     }
-
-    pub fn run_analyzers(
-        &mut self,
-        analyzers: &[Box<dyn FileAnalyzer>],
-    ) -> Result<&[ExtractedFile], TaskError> {
-        let loader = self.loader.as_ref().ok_or(TaskError::MissingLoader)?;
-        let outcomes = loader
-            .invoke_analyzers(analyzers)
-            .map_err(TaskError::Loader)?;
-
-        for outcome in outcomes {
-            self.extracted_payloads.extend(outcome.extracted_payloads);
-            self.collect_extracted_files(outcome.extracted_files);
-        }
-
-        Ok(self.extracted_files())
-    }
 }
-
-#[derive(Debug)]
-pub enum TaskError {
-    MissingLoader,
-    Loader(LoaderError),
-}
-
-impl Display for TaskError {
-    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::MissingLoader => write!(f, "task does not have a file loader attached"),
-            Self::Loader(error) => write!(f, "{error}"),
-        }
-    }
-}
-
-impl Error for TaskError {}
