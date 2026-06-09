@@ -5,8 +5,14 @@ StegaScope is a Tauri + React desktop app baseline for building steganography-fo
 ## Current Baseline
 
 - Tauri 2 + React 19 + TypeScript 5 stack is wired and running.
-- Frontend includes a clean bootstrap dashboard (no template demo UI).
-- Rust backend exposes a `bootstrap_status` command to validate app runtime wiring.
+- Frontend provides a case-based steganalysis workspace for creating tasks,
+  attaching media, running analyzers, reviewing extracted files, and saving
+  recovered payloads.
+- Rust backend exposes task, media attachment, analyzer execution, extracted-file
+  lookup, and payload download commands.
+- Analyzer coverage includes embedded file-signature scans, RGB LSB streams,
+  two-bit-per-pixel LSB strategies, verified StegaScope packets, and PNG
+  metadata/ancillary chunk scans.
 
 ## Development
 
@@ -18,7 +24,7 @@ npm run tauri dev
 ## Build
 
 ```bash
-npm run tauri build
+npm run tauri -- build
 ```
 
 ## Project Layout
@@ -29,7 +35,10 @@ npm run tauri build
 
 ## Suggested Next Steps
 
-1. Define MVP requirements for the first steganography workflow.
-2. Add Rust-side image processing commands and invoke contracts.
-3. Split frontend into feature modules (`features/encode`, `features/decode`, etc.).
-4. Add test coverage for Rust commands and critical UI flows.
+1. Decide whether the current case-based steganalysis workflow is the MVP
+   direction, then update local direction and automation gates accordingly.
+2. Move large media ingestion closer to Rust so desktop file paths can be read
+   without sending full `number[]` payloads over Tauri IPC.
+3. Split frontend analysis surfaces into feature modules once the workflow is
+   accepted.
+4. Add command-level Rust tests and critical UI/API flow coverage.

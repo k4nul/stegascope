@@ -144,8 +144,11 @@ impl FileAnalyzer for MetadataAnalyzer {
         &self.base
     }
 
-    fn analyze(&self, _media: &LoadedMedia) -> Result<AnalysisOutcome, AnalysisError> {
-        Ok(AnalysisOutcome::default())
+    fn analyze(&self, media: &LoadedMedia) -> Result<AnalysisOutcome, AnalysisError> {
+        Ok(AnalysisOutcome::from_payloads(extract_metadata_payloads(
+            media,
+            self.name(),
+        )))
     }
 }
 
@@ -541,6 +544,118 @@ fn extract_embedded_signature_payloads(
         SuspiciousLevel::High,
         analyzer_name,
     )
+}
+
+const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1A\n";
+
+fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<ExtractedPayload> {
+    if !media.bytes.starts_with(PNG_SIGNATURE) {
+        return Vec::new();
+    }
+
+    let mut verified_payloads = Vec::new();
+    let mut fallback_payloads = Vec::new();
+
+    for chunk in png_metadata_chunks(&media.bytes) {
+        verified_payloads.extend(find_stegascope_packet_candidates(chunk.data, analyzer_name));
+
+        let prefix = format!(
+            "metadata_png_{}_chunk_{}",
+            png_chunk_type_label(chunk.kind),
+            chunk.index
+        );
+        fallback_payloads.extend(signature_payload_candidates(
+            chunk.data,
+            None,
+            &prefix,
+            0,
+            SuspiciousLevel::High,
+            analyzer_name,
+        ));
+    }
+
+    if verified_payloads.is_empty() {
+        fallback_payloads
+    } else {
+        verified_payloads
+    }
+}
+
+struct PngChunk<'a> {
+    index: usize,
+    kind: &'a [u8],
+    data: &'a [u8],
+}
+
+fn png_metadata_chunks(bytes: &[u8]) -> Vec<PngChunk<'_>> {
+    if !bytes.starts_with(PNG_SIGNATURE) {
+        return Vec::new();
+    }
+
+    let mut chunks = Vec::new();
+    let mut offset = PNG_SIGNATURE.len();
+    let mut index = 0;
+
+    loop {
+        let Some(length_end) = offset.checked_add(4) else {
+            break;
+        };
+        let Some(kind_end) = length_end.checked_add(4) else {
+            break;
+        };
+        if kind_end > bytes.len() {
+            break;
+        }
+
+        let length = u32::from_be_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        let data_start = kind_end;
+        let Some(data_end) = data_start.checked_add(length) else {
+            break;
+        };
+        let Some(next_offset) = data_end.checked_add(4) else {
+            break;
+        };
+        if next_offset > bytes.len() {
+            break;
+        }
+
+        index += 1;
+        let kind = &bytes[length_end..kind_end];
+        if is_png_metadata_chunk(kind) {
+            chunks.push(PngChunk {
+                index,
+                kind,
+                data: &bytes[data_start..data_end],
+            });
+        }
+
+        offset = next_offset;
+    }
+
+    chunks
+}
+
+fn is_png_metadata_chunk(kind: &[u8]) -> bool {
+    matches!(kind, b"tEXt" | b"iTXt" | b"zTXt" | b"eXIf")
+        || kind.first().is_some_and(u8::is_ascii_lowercase)
+}
+
+fn png_chunk_type_label(kind: &[u8]) -> String {
+    kind.iter()
+        .map(|byte| {
+            let character = *byte as char;
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 fn signature_payload_candidates(
@@ -1044,6 +1159,70 @@ mod tests {
     }
 
     #[test]
+    fn metadata_analyzer_extracts_packet_payload_from_png_text_chunk() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("case_note.pdf", secret);
+        let bytes = png_with_text_chunk(b"Comment", &packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "case_note.pdf")
+            .expect("expected metadata packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "metadata-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.file_size_bytes, secret.len() as u64);
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn metadata_analyzer_extracts_valid_signature_from_png_text_chunk() {
+        let bytes = png_with_text_chunk(b"Comment", valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_type == "application/pdf")
+            .expect("expected metadata signature payload");
+
+        assert!(file.file_name.starts_with("metadata_png_text_chunk_"));
+        assert!(file.file_name.ends_with("_payload_8.pdf"));
+        assert_eq!(file.analyzer_name, "metadata-analyzer");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn metadata_analyzer_ignores_non_png_media() {
+        let media = LoadedMedia {
+            source: MediaFileInfo::new(
+                "carrier.bin",
+                valid_pdf_payload().len() as u64,
+                "application/octet-stream",
+            ),
+            bytes: valid_pdf_payload().to_vec(),
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn lsb_2bpp_analyzer_extracts_known_signature_from_two_pixel_channels() {
         let payload = valid_pdf_payload();
         let bytes = png_with_rg_2bpp_payload(payload, BitPacking::MsbFirst);
@@ -1274,6 +1453,56 @@ mod tests {
             .unwrap();
 
         bytes
+    }
+
+    fn png_with_text_chunk(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let image = image::RgbaImage::from_pixel(1, 1, image::Rgba([0xFE, 0xFE, 0xFE, 0xFF]));
+        let mut bytes = Vec::new();
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(
+                image.as_raw(),
+                image.width(),
+                image.height(),
+                image::ExtendedColorType::Rgba8,
+            )
+            .unwrap();
+
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(keyword);
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(payload);
+        let chunk = png_chunk(*b"tEXt", &chunk_data);
+        let iend_type_offset = bytes
+            .windows(4)
+            .position(|window| window == b"IEND")
+            .expect("encoded PNG should contain IEND chunk");
+        let iend_chunk_offset = iend_type_offset - 4;
+        bytes.splice(iend_chunk_offset..iend_chunk_offset, chunk);
+
+        bytes
+    }
+
+    fn png_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        chunk.extend_from_slice(&kind);
+        chunk.extend_from_slice(data);
+        chunk.extend_from_slice(&png_crc32(&kind, data).to_be_bytes());
+        chunk
+    }
+
+    fn png_crc32(kind: &[u8; 4], data: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFF_u32;
+
+        for byte in kind.iter().chain(data.iter()) {
+            crc ^= *byte as u32;
+            for _ in 0..8 {
+                let mask = 0_u32.wrapping_sub(crc & 1);
+                crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+            }
+        }
+
+        !crc
     }
 
     fn payload_bits(payload: &[u8], bit_packing: BitPacking) -> Vec<u8> {
