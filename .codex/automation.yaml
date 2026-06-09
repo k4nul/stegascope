@@ -1,0 +1,34 @@
+schema_version: "1.0"
+project_id: "stegascope"
+automation:
+  prepared: true
+  enabled: false
+  activation_state: "disabled_until_product_direction_is_selected"
+  triggers: []
+  jobs:
+    frontend_build:
+      enabled: false
+      command: "npm run build"
+      required_paths:
+        - "src/"
+        - "index.html"
+        - "vite.config.ts"
+    rust_check:
+      enabled: false
+      command: "cargo check --manifest-path src-tauri/Cargo.toml"
+      required_paths:
+        - "src-tauri/"
+    tauri_package:
+      enabled: false
+      command: "npm run tauri -- build"
+      required_paths:
+        - "src/"
+        - "src-tauri/"
+activation:
+  required_changes:
+    - "set automation.enabled to true"
+    - "select at least one trigger"
+    - "enable required jobs"
+  default_triggers_when_enabled:
+    - "manual"
+    - "pull_request"
