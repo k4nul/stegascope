@@ -391,3 +391,105 @@ fn completed_at_label() -> String {
 
     format!("unix:{seconds}")
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use std::path::Path;
+
+    #[test]
+    fn save_downloaded_payload_creates_parent_directories_and_writes_bytes() {
+        let temp_dir = TempDir::new("writes-nested-payload");
+        let target_path = temp_dir.path().join("downloads").join("payload.bin");
+
+        let saved_path = save_downloaded_payload(
+            target_path.to_str().expect("target path should be utf-8"),
+            b"hidden payload",
+        )
+        .expect("payload should be saved");
+
+        assert_eq!(saved_path, target_path);
+        assert_eq!(
+            fs::read(&saved_path).expect("saved payload should be readable"),
+            b"hidden payload"
+        );
+    }
+
+    #[test]
+    fn save_downloaded_payload_rejects_blank_path() {
+        let error = save_downloaded_payload("   ", b"payload")
+            .expect_err("blank save path should be rejected");
+
+        assert_eq!(error, "save path is required");
+    }
+
+    #[test]
+    fn save_downloaded_payload_rejects_directory_target() {
+        let temp_dir = TempDir::new("rejects-directory-target");
+        let directory_path = temp_dir.path().join("existing-directory");
+        fs::create_dir_all(&directory_path).expect("directory target should be created");
+
+        let error = save_downloaded_payload(
+            directory_path
+                .to_str()
+                .expect("directory path should be utf-8"),
+            b"payload",
+        )
+        .expect_err("directory target should be rejected");
+
+        assert_eq!(error, "save path points to a directory");
+        assert!(fs::read_dir(&directory_path)
+            .expect("directory should still be readable")
+            .next()
+            .is_none());
+    }
+
+    #[test]
+    fn save_downloaded_payload_trims_outer_whitespace_before_saving() {
+        let temp_dir = TempDir::new("trims-save-path");
+        let target_path = temp_dir.path().join("payload.bin");
+        let padded_target_path = format!(
+            "  {}  ",
+            target_path.to_str().expect("target path should be utf-8")
+        );
+
+        let saved_path = save_downloaded_payload(&padded_target_path, b"trimmed path payload")
+            .expect("trimmed target path should be saved");
+
+        assert_eq!(saved_path, target_path);
+        assert_eq!(
+            fs::read(&saved_path).expect("saved payload should be readable"),
+            b"trimmed path payload"
+        );
+    }
+
+    struct TempDir {
+        path: PathBuf,
+    }
+
+    impl TempDir {
+        fn new(test_name: &str) -> Self {
+            let unique_id = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .expect("system time should be after unix epoch")
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "stegascope-{test_name}-{}-{unique_id}",
+                std::process::id()
+            ));
+
+            Self { path }
+        }
+
+        fn path(&self) -> &Path {
+            &self.path
+        }
+    }
+
+    impl Drop for TempDir {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.path);
+        }
+    }
+}
