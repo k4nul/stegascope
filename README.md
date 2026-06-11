@@ -25,8 +25,8 @@ Current implementation facts:
 - Frontend: React 19, TypeScript 5, and Vite.
 - Desktop shell: Tauri 2 with Rust command handlers.
 - Analyzer coverage: PNG metadata and ancillary text chunks, embedded file
-  signatures, RGB LSB streams, two-bit-per-pixel LSB strategies, and verified
-  StegaScope packets.
+  signatures, JPEG COM/APP segment and after-EOI payload data, RGB LSB streams,
+  two-bit-per-pixel LSB strategies, and verified StegaScope packets.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; command-level Rust tests and frontend UI/API
   flow tests are still missing.
