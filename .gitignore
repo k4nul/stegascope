@@ -18,6 +18,9 @@ src-tauri/target/
 target/
 *.pem
 *.key
+AGENTS.md
+.codex/
+docs/management/
 
 # Editor directories and files
 .vscode/*
