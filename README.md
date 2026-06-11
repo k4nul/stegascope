@@ -91,8 +91,6 @@ See [Testing](docs/testing.md) for when each command is appropriate.
   extracted files, and media file metadata.
 - `src-tauri/tauri.conf.json`: Tauri app, dev server, build, bundle, and window
   configuration.
-- `.codex/automation.yaml`: prepared but disabled automation gate.
-- `AGENTS.md`: local maintainer instructions and validation policy.
 
 ## Suggested Next Steps
 
