@@ -6,6 +6,14 @@ workspace where an investigator can create a task, attach one media file, run
 the registered analyzers, review extracted payload candidates, and save recovered
 payload bytes through the desktop shell.
 
+## Open Source
+
+This repository is prepared for public collaboration under the [MIT License](LICENSE).
+See [CONTRIBUTING.md](CONTRIBUTING.md), [SECURITY.md](SECURITY.md), and
+[CODE_OF_CONDUCT.md](CODE_OF_CONDUCT.md) before opening issues or pull requests.
+Do not commit real evidence files, recovered private payloads, local app data,
+or generated desktop bundles.
+
 ## Project Status
 
 The repository is direction-pending. Local automation is prepared but disabled
