@@ -2,6 +2,8 @@
   "name": "stegascope",
   "private": true,
   "version": "0.1.0",
+  "description": "Tauri desktop workspace for steganography-focused media analysis.",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "dev": "vite",
