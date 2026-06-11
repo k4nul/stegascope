@@ -153,6 +153,35 @@ impl FileAnalyzer for MetadataAnalyzer {
 }
 
 #[derive(Debug)]
+pub struct JpegSegmentAnalyzer {
+    base: BaseFileAnalyzer,
+}
+
+impl Default for JpegSegmentAnalyzer {
+    fn default() -> Self {
+        Self {
+            base: BaseFileAnalyzer::new("jpeg-segment-analyzer")
+                .with_version("0.1.0")
+                .with_description(
+                    "Scans JPEG COM/APP segments and trailing after-EOI payload data.",
+                ),
+        }
+    }
+}
+
+impl FileAnalyzer for JpegSegmentAnalyzer {
+    fn base(&self) -> &BaseFileAnalyzer {
+        &self.base
+    }
+
+    fn analyze(&self, media: &LoadedMedia) -> Result<AnalysisOutcome, AnalysisError> {
+        Ok(AnalysisOutcome::from_payloads(
+            extract_jpeg_segment_payloads(media, self.name()),
+        ))
+    }
+}
+
+#[derive(Debug)]
 pub struct EmbeddedSignatureAnalyzer {
     base: BaseFileAnalyzer,
 }
@@ -299,11 +328,10 @@ impl FileAnalyzer for LsbAnalyzer {
             }
         }
 
-        if verified_payloads.is_empty() {
-            Ok(AnalysisOutcome::from_payloads(fallback_payloads))
-        } else {
-            Ok(AnalysisOutcome::from_payloads(verified_payloads))
-        }
+        Ok(outcome_prefer_verified(
+            verified_payloads,
+            fallback_payloads,
+        ))
     }
 }
 
@@ -377,17 +405,17 @@ impl FileAnalyzer for Lsb2bppAnalyzer {
             }
         }
 
-        if verified_payloads.is_empty() {
-            Ok(AnalysisOutcome::from_payloads(fallback_payloads))
-        } else {
-            Ok(AnalysisOutcome::from_payloads(verified_payloads))
-        }
+        Ok(outcome_prefer_verified(
+            verified_payloads,
+            fallback_payloads,
+        ))
     }
 }
 
 pub fn default_analyzers() -> Vec<Box<dyn FileAnalyzer>> {
     vec![
         Box::<MetadataAnalyzer>::default(),
+        Box::<JpegSegmentAnalyzer>::default(),
         Box::<EmbeddedSignatureAnalyzer>::default(),
         Box::<LsbAnalyzer>::default(),
         Box::<Lsb2bppAnalyzer>::default(),
@@ -419,6 +447,27 @@ pub fn finalize_extracted_payloads(mut payloads: Vec<ExtractedPayload>) -> Vec<E
     }
 
     payloads
+}
+
+fn outcome_prefer_verified(
+    verified_payloads: Vec<ExtractedPayload>,
+    fallback_payloads: Vec<ExtractedPayload>,
+) -> AnalysisOutcome {
+    AnalysisOutcome::from_payloads(payloads_prefer_verified(
+        verified_payloads,
+        fallback_payloads,
+    ))
+}
+
+fn payloads_prefer_verified(
+    verified_payloads: Vec<ExtractedPayload>,
+    fallback_payloads: Vec<ExtractedPayload>,
+) -> Vec<ExtractedPayload> {
+    if verified_payloads.is_empty() {
+        fallback_payloads
+    } else {
+        verified_payloads
+    }
 }
 
 fn extract_rgb_lsb_bits(image: &image::RgbaImage) -> Vec<u8> {
@@ -547,6 +596,8 @@ fn extract_embedded_signature_payloads(
 }
 
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1A\n";
+const JPEG_SOI: &[u8; 2] = b"\xFF\xD8";
+const JPEG_EOI: &[u8; 2] = b"\xFF\xD9";
 
 fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<ExtractedPayload> {
     if !media.bytes.starts_with(PNG_SIGNATURE) {
@@ -574,10 +625,161 @@ fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<Ex
         ));
     }
 
-    if verified_payloads.is_empty() {
-        fallback_payloads
-    } else {
-        verified_payloads
+    payloads_prefer_verified(verified_payloads, fallback_payloads)
+}
+
+fn extract_jpeg_segment_payloads(
+    media: &LoadedMedia,
+    analyzer_name: &str,
+) -> Vec<ExtractedPayload> {
+    if !media.bytes.starts_with(JPEG_SOI) {
+        return Vec::new();
+    }
+
+    let mut verified_payloads = Vec::new();
+    let mut fallback_payloads = Vec::new();
+
+    for segment in jpeg_payload_segments(&media.bytes) {
+        verified_payloads.extend(find_stegascope_packet_candidates(
+            segment.data,
+            analyzer_name,
+        ));
+
+        let prefix = format!(
+            "jpeg_{}_segment_{}",
+            jpeg_segment_type_label(segment.marker),
+            segment.index
+        );
+        fallback_payloads.extend(signature_payload_candidates(
+            segment.data,
+            None,
+            &prefix,
+            0,
+            SuspiciousLevel::High,
+            analyzer_name,
+        ));
+    }
+
+    if let Some(after_eoi) = jpeg_after_eoi_payload(&media.bytes) {
+        verified_payloads.extend(find_stegascope_packet_candidates(after_eoi, analyzer_name));
+        fallback_payloads.extend(signature_payload_candidates(
+            after_eoi,
+            None,
+            "jpeg_after_eoi",
+            0,
+            SuspiciousLevel::Critical,
+            analyzer_name,
+        ));
+    }
+
+    payloads_prefer_verified(verified_payloads, fallback_payloads)
+}
+
+struct JpegSegment<'a> {
+    index: usize,
+    marker: u8,
+    data: &'a [u8],
+}
+
+fn jpeg_payload_segments(bytes: &[u8]) -> Vec<JpegSegment<'_>> {
+    if !bytes.starts_with(JPEG_SOI) {
+        return Vec::new();
+    }
+
+    let mut segments = Vec::new();
+    let mut offset = JPEG_SOI.len();
+    let mut index = 0;
+
+    while offset < bytes.len() {
+        while offset < bytes.len() && bytes[offset] == 0xFF {
+            offset += 1;
+        }
+
+        if offset >= bytes.len() {
+            break;
+        }
+
+        let marker = bytes[offset];
+        offset += 1;
+
+        if marker == 0xD9 || marker == 0xDA {
+            break;
+        }
+
+        if marker == 0x00 || jpeg_marker_has_no_payload(marker) {
+            continue;
+        }
+
+        let Some(length_end) = offset.checked_add(2) else {
+            break;
+        };
+        if length_end > bytes.len() {
+            break;
+        }
+
+        let segment_length = u16::from_be_bytes([bytes[offset], bytes[offset + 1]]) as usize;
+        if segment_length < 2 {
+            break;
+        }
+
+        let data_start = length_end;
+        let Some(data_end) = data_start.checked_add(segment_length - 2) else {
+            break;
+        };
+        if data_end > bytes.len() {
+            break;
+        }
+
+        index += 1;
+        if is_jpeg_payload_segment(marker) {
+            segments.push(JpegSegment {
+                index,
+                marker,
+                data: &bytes[data_start..data_end],
+            });
+        }
+
+        offset = data_end;
+    }
+
+    segments
+}
+
+fn jpeg_after_eoi_payload(bytes: &[u8]) -> Option<&[u8]> {
+    let eoi_offset = find_signature_offsets(bytes, JPEG_EOI).into_iter().next()?;
+    let payload_start = eoi_offset.checked_add(JPEG_EOI.len())?;
+
+    (payload_start < bytes.len()).then_some(&bytes[payload_start..])
+}
+
+fn jpeg_marker_has_no_payload(marker: u8) -> bool {
+    marker == 0x01 || (0xD0..=0xD8).contains(&marker)
+}
+
+fn is_jpeg_payload_segment(marker: u8) -> bool {
+    marker == 0xFE || (0xE0..=0xEF).contains(&marker)
+}
+
+fn jpeg_segment_type_label(marker: u8) -> &'static str {
+    match marker {
+        0xFE => "com",
+        0xE0 => "app0",
+        0xE1 => "app1",
+        0xE2 => "app2",
+        0xE3 => "app3",
+        0xE4 => "app4",
+        0xE5 => "app5",
+        0xE6 => "app6",
+        0xE7 => "app7",
+        0xE8 => "app8",
+        0xE9 => "app9",
+        0xEA => "app10",
+        0xEB => "app11",
+        0xEC => "app12",
+        0xED => "app13",
+        0xEE => "app14",
+        0xEF => "app15",
+        _ => "segment",
     }
 }
 
@@ -1223,6 +1425,52 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_extracts_packet_payload_from_comment_segment() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("jpeg_note.pdf", secret);
+        let bytes = jpeg_with_comment_segment(&packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_note.pdf")
+            .expect("expected JPEG COM packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.file_size_bytes, secret.len() as u64);
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_extracts_valid_signature_after_eoi() {
+        let bytes = jpeg_with_after_eoi_payload(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected after-EOI PDF payload");
+
+        assert_eq!(file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
     fn lsb_2bpp_analyzer_extracts_known_signature_from_two_pixel_channels() {
         let payload = valid_pdf_payload();
         let bytes = png_with_rg_2bpp_payload(payload, BitPacking::MsbFirst);
@@ -1368,6 +1616,37 @@ mod tests {
 
     fn valid_pdf_payload() -> &'static [u8] {
         b"%PDF-1.7\n1 0 obj\n<<>>\nendobj\ntrailer\n<<>>\n%%EOF\n"
+    }
+
+    fn jpeg_with_comment_segment(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, payload));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes
+    }
+
+    fn jpeg_with_after_eoi_payload(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(payload);
+        bytes
+    }
+
+    fn jpeg_segment_bytes(marker: u8, data: &[u8]) -> Vec<u8> {
+        let segment_length = data
+            .len()
+            .checked_add(2)
+            .expect("test JPEG segment should fit length field");
+        assert!(segment_length <= u16::MAX as usize);
+
+        let mut segment = Vec::new();
+        segment.push(0xFF);
+        segment.push(marker);
+        segment.extend_from_slice(&(segment_length as u16).to_be_bytes());
+        segment.extend_from_slice(data);
+        segment
     }
 
     fn png_with_lsb_payload(payload: &[u8], bit_packing: BitPacking) -> Vec<u8> {

@@ -26,6 +26,7 @@ cover representative payload extraction behavior, including:
 - Non-image media ignored by image-only analyzers.
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
+- JPEG COM packet extraction and after-EOI signature candidate extraction.
 - Two-bit-per-pixel channel and matrix strategies.
 - Verified packet payload byte recovery.
 - Signature-only candidate suppression when verified packets exist.
