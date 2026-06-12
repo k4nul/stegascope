@@ -60,7 +60,8 @@ Document any skipped validation with the exact blocker.
 
 - Product direction is not selected.
 - Automation remains disabled by design.
-- Command-level Rust tests are missing.
+- Command-level Rust coverage is partial; attach and analyze command flow has
+  initial tests, while create/list/download command paths still need coverage.
 - Frontend UI/API flow tests are missing.
 - Large media handling still sends full file byte arrays over Tauri IPC.
 - Class diagram exports need regeneration or replacement.

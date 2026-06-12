@@ -32,6 +32,7 @@ cover representative payload extraction behavior, including:
 - Signature-only candidate suppression when verified packets exist.
 - Invalid MP3 candidate rejection.
 
+There are initial command-level Rust tests for attach and analyze command flow.
 There are no frontend tests, command-level Rust tests for every Tauri command,
 or end-to-end desktop workflow tests yet.
 
@@ -66,8 +67,8 @@ npm run tauri -- build
 
 Add these before treating the app as a stable MVP:
 
-- Command-level tests for `create_task`, `attach_media_file`, `analyze_task`,
-  `get_extracted_files`, and `download_extracted_file`.
+- Complete command-level tests for `create_task`, `get_extracted_files`, and
+  `download_extracted_file`, plus negative-path attach and analyze cases.
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Test fixtures for supported media classes and known payload examples.
