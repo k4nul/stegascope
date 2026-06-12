@@ -26,7 +26,8 @@ cover representative payload extraction behavior, including:
 - Non-image media ignored by image-only analyzers.
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
-- JPEG COM packet extraction and after-EOI signature candidate extraction.
+- JPEG COM/APP segment extraction, structural after-EOI signature extraction,
+  malformed segment safety, and scan-data isolation.
 - Two-bit-per-pixel channel and matrix strategies.
 - Verified packet payload byte recovery.
 - Signature-only candidate suppression when verified packets exist.
@@ -35,6 +36,10 @@ cover representative payload extraction behavior, including:
 There are initial command-level Rust tests for attach and analyze command flow.
 There are no frontend tests, command-level Rust tests for every Tauri command,
 or end-to-end desktop workflow tests yet.
+
+Analyzer fixtures are synthetic inline byte vectors or generated images. Do not
+commit real evidence files, recovered private payloads, or generated fixture
+artifacts for analyzer coverage.
 
 ## Recommended Validation By Change Type
 
