@@ -28,8 +28,8 @@ Current implementation facts:
   signatures, JPEG COM/APP segment and after-EOI payload data, RGB LSB streams,
   two-bit-per-pixel LSB strategies, and verified StegaScope packets.
 - Task state is in memory for the running desktop session.
-- Rust analyzer unit tests exist; command-level Rust tests and frontend UI/API
-  flow tests are still missing.
+- Rust analyzer unit tests exist; initial command-level Rust tests cover attach
+  and analyze command flow; frontend UI/API flow tests are still missing.
 
 ## Documentation Map
 

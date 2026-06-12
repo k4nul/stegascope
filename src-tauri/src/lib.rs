@@ -104,6 +104,13 @@ fn bootstrap_status() -> BootstrapStatus {
 
 #[tauri::command]
 fn create_task(input: CreateTaskInput, state: State<'_, AppState>) -> Result<TaskResponse, String> {
+    create_task_with_state(input, state.inner())
+}
+
+fn create_task_with_state(
+    input: CreateTaskInput,
+    state: &AppState,
+) -> Result<TaskResponse, String> {
     validate_required(&input.case_number, "case number")?;
     validate_required(&input.case_name, "case name")?;
     validate_required(&input.investigator_name, "investigator name")?;
@@ -136,6 +143,14 @@ fn attach_media_file(
     input: UploadedMediaInput,
     state: State<'_, AppState>,
 ) -> Result<TaskResponse, String> {
+    attach_media_file_with_state(task_id, input, state.inner())
+}
+
+fn attach_media_file_with_state(
+    task_id: String,
+    input: UploadedMediaInput,
+    state: &AppState,
+) -> Result<TaskResponse, String> {
     validate_required(&task_id, "task id")?;
     validate_required(&input.file_name, "file name")?;
 
@@ -167,6 +182,13 @@ fn attach_media_file(
 fn analyze_task(
     task_id: String,
     state: State<'_, AppState>,
+) -> Result<AnalysisResultResponse, String> {
+    analyze_task_with_state(task_id, state.inner())
+}
+
+fn analyze_task_with_state(
+    task_id: String,
+    state: &AppState,
 ) -> Result<AnalysisResultResponse, String> {
     validate_required(&task_id, "task id")?;
 
@@ -206,6 +228,13 @@ fn get_extracted_files(
     task_id: String,
     state: State<'_, AppState>,
 ) -> Result<Vec<ExtractedFile>, String> {
+    get_extracted_files_with_state(task_id, state.inner())
+}
+
+fn get_extracted_files_with_state(
+    task_id: String,
+    state: &AppState,
+) -> Result<Vec<ExtractedFile>, String> {
     validate_required(&task_id, "task id")?;
 
     let tasks = lock_tasks(&state)?;
@@ -223,6 +252,22 @@ fn download_extracted_file(
     analyzer_name: String,
     target_path: String,
     state: State<'_, AppState>,
+) -> Result<DownloadExtractedFileResponse, String> {
+    download_extracted_file_with_state(
+        task_id,
+        file_name,
+        analyzer_name,
+        target_path,
+        state.inner(),
+    )
+}
+
+fn download_extracted_file_with_state(
+    task_id: String,
+    file_name: String,
+    analyzer_name: String,
+    target_path: String,
+    state: &AppState,
 ) -> Result<DownloadExtractedFileResponse, String> {
     validate_required(&task_id, "task id")?;
     validate_required(&file_name, "file name")?;
@@ -271,9 +316,7 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-fn lock_tasks<'a>(
-    state: &'a State<'_, AppState>,
-) -> Result<MutexGuard<'a, HashMap<String, Task>>, String> {
+fn lock_tasks(state: &AppState) -> Result<MutexGuard<'_, HashMap<String, Task>>, String> {
     state
         .tasks
         .lock()
@@ -396,6 +439,7 @@ fn completed_at_label() -> String {
 mod tests {
     use super::*;
 
+    use image::ImageEncoder;
     use std::path::Path;
 
     #[test]
@@ -462,6 +506,84 @@ mod tests {
             fs::read(&saved_path).expect("saved payload should be readable"),
             b"trimmed path payload"
         );
+    }
+
+    #[test]
+    fn attach_media_file_command_test_attaches_media_and_normalizes_type() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let png_bytes = png_image_bytes();
+
+        let response = attach_media_file_with_state(
+            task.task_id,
+            UploadedMediaInput {
+                file_name: "carrier.png".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: png_bytes.clone(),
+            },
+            &state,
+        )
+        .expect("media file should attach");
+        let media_file = response
+            .media_file
+            .expect("attached media should be returned");
+
+        assert_eq!(media_file.file_name, "carrier.png");
+        assert_eq!(media_file.file_size_bytes, png_bytes.len() as u64);
+        assert_eq!(media_file.file_type, "image/png");
+        assert!(response.extracted_files.is_empty());
+    }
+
+    #[test]
+    fn analyze_task_command_test_runs_default_analyzers_and_stores_result() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "carrier.png".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: png_image_bytes(),
+            },
+            &state,
+        )
+        .expect("media file should attach");
+
+        let result = analyze_task_with_state(task_id.clone(), &state).expect("analysis should run");
+        let stored_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("stored analysis result should be readable");
+
+        assert_eq!(result.task_id, task_id);
+        assert_eq!(result.confidence, 0.12);
+        assert_eq!(result.suspicious_regions, 0);
+        assert_eq!(result.note, "No extracted payload candidates were found.");
+        assert!(result.completed_at.starts_with("unix:"));
+        assert!(result.extracted_files.is_empty());
+        assert!(stored_files.is_empty());
+    }
+
+    fn sample_task_input() -> CreateTaskInput {
+        CreateTaskInput {
+            case_number: "CASE-001".to_string(),
+            case_name: "Synthetic dependency validation".to_string(),
+            investigator_name: "Automation".to_string(),
+            date: "2026-06-12".to_string(),
+        }
+    }
+
+    fn png_image_bytes() -> Vec<u8> {
+        let mut bytes = Vec::new();
+        let pixels = [0_u8, 0, 0, 255];
+        image::codecs::png::PngEncoder::new(&mut bytes)
+            .write_image(&pixels, 1, 1, image::ExtendedColorType::Rgba8)
+            .expect("test PNG should encode");
+        bytes
     }
 
     struct TempDir {
