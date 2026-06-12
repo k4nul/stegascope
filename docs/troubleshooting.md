@@ -54,6 +54,10 @@ signature, verified StegaScope packet, metadata payload, or supported LSB payloa
 For image LSB analysis, the media must decode successfully as an image. For
 non-image media, the LSB analyzers return no candidates.
 
+For JPEG segment analysis, candidates are limited to valid COM/APP segment data
+or bytes appended after the structural EOI marker. Payload-like bytes inside
+scan image data, malformed segments, or non-JPEG bytes are ignored.
+
 ## Task Not Found
 
 Task IDs exist only in the running desktop session. Restarting the app clears the

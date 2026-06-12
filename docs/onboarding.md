@@ -71,8 +71,9 @@ generic binary loader.
 `default_analyzers()` currently registers:
 
 - `metadata-analyzer`: scans PNG metadata and tagged side channels.
-- `jpeg-segment-analyzer`: scans JPEG COM/APP segment data and payload bytes
-  appended after EOI.
+- `jpeg-segment-analyzer`: scans marker-delimited JPEG COM/APP segment data and
+  payload bytes appended after the structural EOI marker while skipping scan
+  image data.
 - `embedded-signature-analyzer`: searches for known embedded file signatures
   after the media header.
 - `lsb-analyzer`: extracts RGB least-significant-bit streams from decoded images.
