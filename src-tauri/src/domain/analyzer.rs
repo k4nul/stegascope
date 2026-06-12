@@ -1483,6 +1483,121 @@ mod tests {
     }
 
     #[test]
+    fn metadata_analyzer_extracts_valid_signature_from_supported_png_metadata_chunk_kinds() {
+        for (kind, label) in [(*b"iTXt", "itxt"), (*b"zTXt", "ztxt"), (*b"eXIf", "exif")] {
+            let chunk_data = png_text_chunk_data(b"Comment", valid_pdf_payload());
+            let bytes = png_with_chunk(kind, &chunk_data);
+            let media = LoadedMedia {
+                source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+                bytes,
+            };
+
+            let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+            let file = outcome
+                .extracted_files
+                .iter()
+                .find(|file| file.file_type == "application/pdf")
+                .expect("expected PDF payload from supported metadata chunk");
+
+            assert!(file
+                .file_name
+                .starts_with(&format!("metadata_png_{label}_chunk_")));
+            assert!(file.file_name.ends_with("_payload_8.pdf"));
+            assert_eq!(file.analyzer_name, "metadata-analyzer");
+            assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+            assert_eq!(file.validation_status, ValidationStatus::Validated);
+        }
+    }
+
+    #[test]
+    fn metadata_analyzer_extracts_valid_signature_from_custom_ancillary_png_chunk() {
+        let bytes = png_with_chunk(*b"stEg", valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| {
+                file.file_name.starts_with("metadata_png_steg_chunk_")
+                    && file.file_name.ends_with("_payload_0.pdf")
+            })
+            .expect("expected PDF payload from custom ancillary chunk");
+
+        assert_eq!(file.analyzer_name, "metadata-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn metadata_analyzer_ignores_non_metadata_critical_png_chunk() {
+        let bytes = png_with_chunk(*b"ABCD", valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn metadata_analyzer_handles_truncated_png_chunk_without_extracting() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(PNG_SIGNATURE);
+        bytes.extend_from_slice(&32_u32.to_be_bytes());
+        bytes.extend_from_slice(b"tEXt");
+        bytes.extend_from_slice(b"Comment\0%PDF");
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("truncated.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn metadata_analyzer_prefers_verified_packet_over_signature_candidates_across_png_chunks() {
+        let signature_chunk = png_text_chunk_data(b"Comment", valid_pdf_payload());
+        let secret = b"\x89PNG\r\n\x1A\nverified-metadata-payload";
+        let packet = stegascope_packet("metadata_blueprint.png", secret);
+        let packet_chunk = png_text_chunk_data(b"StegaScope", &packet);
+        let bytes = png_with_chunks(&[
+            (*b"tEXt", signature_chunk.as_slice()),
+            (*b"iTXt", packet_chunk.as_slice()),
+        ]);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "metadata_blueprint.png"
+                && payload.file.file_type == "image/png"
+                && payload.bytes == secret
+        }));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.source == PayloadSource::SignatureScan));
+    }
+
+    #[test]
     fn metadata_analyzer_ignores_non_png_media() {
         let media = LoadedMedia {
             source: MediaFileInfo::new(
@@ -1932,6 +2047,23 @@ mod tests {
     }
 
     fn png_with_text_chunk(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let chunk_data = png_text_chunk_data(keyword, payload);
+        png_with_chunk(*b"tEXt", &chunk_data)
+    }
+
+    fn png_text_chunk_data(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(keyword);
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(payload);
+        chunk_data
+    }
+
+    fn png_with_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
+        png_with_chunks(&[(kind, data)])
+    }
+
+    fn png_with_chunks(chunks: &[([u8; 4], &[u8])]) -> Vec<u8> {
         let image = image::RgbaImage::from_pixel(1, 1, image::Rgba([0xFE, 0xFE, 0xFE, 0xFF]));
         let mut bytes = Vec::new();
         image::codecs::png::PngEncoder::new(&mut bytes)
@@ -1943,17 +2075,16 @@ mod tests {
             )
             .unwrap();
 
-        let mut chunk_data = Vec::new();
-        chunk_data.extend_from_slice(keyword);
-        chunk_data.push(0);
-        chunk_data.extend_from_slice(payload);
-        let chunk = png_chunk(*b"tEXt", &chunk_data);
+        let mut inserted_chunks = Vec::new();
+        for (kind, data) in chunks {
+            inserted_chunks.extend_from_slice(&png_chunk(*kind, data));
+        }
         let iend_type_offset = bytes
             .windows(4)
             .position(|window| window == b"IEND")
             .expect("encoded PNG should contain IEND chunk");
         let iend_chunk_offset = iend_type_offset - 4;
-        bytes.splice(iend_chunk_offset..iend_chunk_offset, chunk);
+        bytes.splice(iend_chunk_offset..iend_chunk_offset, inserted_chunks);
 
         bytes
     }
