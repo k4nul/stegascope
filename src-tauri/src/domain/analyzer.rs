@@ -153,6 +153,35 @@ impl FileAnalyzer for MetadataAnalyzer {
 }
 
 #[derive(Debug)]
+pub struct PngContainerAnalyzer {
+    base: BaseFileAnalyzer,
+}
+
+impl Default for PngContainerAnalyzer {
+    fn default() -> Self {
+        Self {
+            base: BaseFileAnalyzer::new("png-container-analyzer")
+                .with_version("0.1.0")
+                .with_description(
+                    "Scans payload data appended after the structural PNG IEND chunk.",
+                ),
+        }
+    }
+}
+
+impl FileAnalyzer for PngContainerAnalyzer {
+    fn base(&self) -> &BaseFileAnalyzer {
+        &self.base
+    }
+
+    fn analyze(&self, media: &LoadedMedia) -> Result<AnalysisOutcome, AnalysisError> {
+        Ok(AnalysisOutcome::from_payloads(
+            extract_png_container_payloads(media, self.name()),
+        ))
+    }
+}
+
+#[derive(Debug)]
 pub struct JpegSegmentAnalyzer {
     base: BaseFileAnalyzer,
 }
@@ -415,6 +444,7 @@ impl FileAnalyzer for Lsb2bppAnalyzer {
 pub fn default_analyzers() -> Vec<Box<dyn FileAnalyzer>> {
     vec![
         Box::<MetadataAnalyzer>::default(),
+        Box::<PngContainerAnalyzer>::default(),
         Box::<JpegSegmentAnalyzer>::default(),
         Box::<EmbeddedSignatureAnalyzer>::default(),
         Box::<LsbAnalyzer>::default(),
@@ -624,6 +654,31 @@ fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<Ex
             analyzer_name,
         ));
     }
+
+    payloads_prefer_verified(verified_payloads, fallback_payloads)
+}
+
+fn extract_png_container_payloads(
+    media: &LoadedMedia,
+    analyzer_name: &str,
+) -> Vec<ExtractedPayload> {
+    if !media.bytes.starts_with(PNG_SIGNATURE) {
+        return Vec::new();
+    }
+
+    let Some(after_iend) = png_after_iend_payload(&media.bytes) else {
+        return Vec::new();
+    };
+
+    let verified_payloads = find_stegascope_packet_candidates(after_iend, analyzer_name);
+    let fallback_payloads = signature_payload_candidates(
+        after_iend,
+        None,
+        "png_after_iend",
+        0,
+        SuspiciousLevel::Critical,
+        analyzer_name,
+    );
 
     payloads_prefer_verified(verified_payloads, fallback_payloads)
 }
@@ -903,6 +958,10 @@ fn png_metadata_chunks(bytes: &[u8]) -> Vec<PngChunk<'_>> {
 
         index += 1;
         let kind = &bytes[length_end..kind_end];
+        if kind == b"IEND" {
+            break;
+        }
+
         if is_png_metadata_chunk(kind) {
             chunks.push(PngChunk {
                 index,
@@ -915,6 +974,48 @@ fn png_metadata_chunks(bytes: &[u8]) -> Vec<PngChunk<'_>> {
     }
 
     chunks
+}
+
+fn png_after_iend_payload(bytes: &[u8]) -> Option<&[u8]> {
+    let payload_start = structural_png_iend_end(bytes)?;
+
+    (payload_start < bytes.len()).then_some(&bytes[payload_start..])
+}
+
+fn structural_png_iend_end(bytes: &[u8]) -> Option<usize> {
+    if !bytes.starts_with(PNG_SIGNATURE) {
+        return None;
+    }
+
+    let mut offset = PNG_SIGNATURE.len();
+
+    loop {
+        let length_end = offset.checked_add(4)?;
+        let kind_end = length_end.checked_add(4)?;
+        if kind_end > bytes.len() {
+            return None;
+        }
+
+        let length = u32::from_be_bytes([
+            bytes[offset],
+            bytes[offset + 1],
+            bytes[offset + 2],
+            bytes[offset + 3],
+        ]) as usize;
+        let data_start = kind_end;
+        let data_end = data_start.checked_add(length)?;
+        let next_offset = data_end.checked_add(4)?;
+        if next_offset > bytes.len() {
+            return None;
+        }
+
+        let kind = &bytes[length_end..kind_end];
+        if kind == b"IEND" {
+            return (length == 0).then_some(next_offset);
+        }
+
+        offset = next_offset;
+    }
 }
 
 fn is_png_metadata_chunk(kind: &[u8]) -> bool {
@@ -1615,6 +1716,92 @@ mod tests {
     }
 
     #[test]
+    fn png_container_analyzer_extracts_packet_payload_after_iend() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("png_container_note.pdf", secret);
+        let bytes = png_with_after_iend_payload(&packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "png_container_note.pdf")
+            .expect("expected after-IEND packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "png-container-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.file_size_bytes, secret.len() as u64);
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn png_container_analyzer_extracts_valid_signature_after_iend() {
+        let bytes = png_with_after_iend_payload(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "png_after_iend_payload_0.pdf")
+            .expect("expected after-IEND PDF payload");
+
+        assert_eq!(file.analyzer_name, "png-container-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn png_container_analyzer_uses_structural_iend_for_trailing_payload() {
+        let mut metadata_note = b"note-IEND-inside-metadata".to_vec();
+        metadata_note.extend_from_slice(valid_pdf_payload());
+        let mut bytes = png_with_text_chunk(b"Comment", &metadata_note);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "png_after_iend_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert_eq!(outcome.extracted_files.len(), 1);
+    }
+
+    #[test]
+    fn png_container_analyzer_handles_truncated_png_without_extracting() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(PNG_SIGNATURE);
+        bytes.extend_from_slice(&32_u32.to_be_bytes());
+        bytes.extend_from_slice(b"tEXt");
+        bytes.extend_from_slice(b"Comment\0%PDF");
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("truncated.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_extracts_packet_payload_from_comment_segment() {
         let secret = valid_pdf_payload();
         let packet = stegascope_packet("jpeg_note.pdf", secret);
@@ -2086,6 +2273,12 @@ mod tests {
         let iend_chunk_offset = iend_type_offset - 4;
         bytes.splice(iend_chunk_offset..iend_chunk_offset, inserted_chunks);
 
+        bytes
+    }
+
+    fn png_with_after_iend_payload(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = png_with_chunks(&[]);
+        bytes.extend_from_slice(payload);
         bytes
     }
 

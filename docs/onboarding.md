@@ -71,6 +71,8 @@ generic binary loader.
 `default_analyzers()` currently registers:
 
 - `metadata-analyzer`: scans PNG metadata and tagged side channels.
+- `png-container-analyzer`: scans payload bytes appended after the structural
+  PNG `IEND` chunk.
 - `jpeg-segment-analyzer`: scans marker-delimited JPEG COM/APP segment data and
   payload bytes appended after the structural EOI marker while skipping scan
   image data.
