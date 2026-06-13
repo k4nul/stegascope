@@ -8,7 +8,7 @@ pub use analyzer::{
     default_analyzers, extract_payload_candidates, finalize_extracted_payloads, AnalysisError,
     AnalysisOutcome, BaseFileAnalyzer, EmbeddedSignatureAnalyzer, ExtractedPayload, FileAnalyzer,
     JpegSegmentAnalyzer, LoadedMedia, Lsb2bppAnalyzer, LsbAnalyzer, MetadataAnalyzer,
-    PayloadSource,
+    PayloadSource, PngContainerAnalyzer,
 };
 pub use extracted_file::{ExtractedFile, FileSignature, SuspiciousLevel, ValidationStatus};
 pub use file_loader::{
