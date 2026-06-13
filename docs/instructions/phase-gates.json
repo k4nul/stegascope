@@ -1,0 +1,124 @@
+{
+  "schema_version": "1.0.0",
+  "project": "stegascope",
+  "current_phase": "container-side-channels",
+  "next_phase": "audio-lsb-analysis",
+  "transition": {
+    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented, tested, and the frontend/Rust boundary remains safe for local files.",
+    "mode": "machine-gated-analyzer-expansion",
+    "validation_command": "npm run build",
+    "transition_validation_command": "npm run build",
+    "decision_rule": "All required gates must be passed, machine-checkable, or waived before changing current_phase."
+  },
+  "phase_model": [
+    {
+      "id": "container-side-channels",
+      "purpose": "Implement the first image-container analyzer package for JPEG and PNG side-channel evidence.",
+      "allowed_work": [
+        "JPEG segment analysis",
+        "PNG deep container analysis",
+        "Rust analyzer tests",
+        "frontend build validation"
+      ],
+      "blocked_work": [
+        "large unscoped analyzer catalog rewrites",
+        "real evidence files",
+        "product direction lock-in outside the selected analyzer package"
+      ],
+      "exit_criteria": [
+        "JPEG segment analyzer exists",
+        "PNG deep container scan exists",
+        "Rust analyzer tests cover the package",
+        "frontend build passes"
+      ]
+    },
+    {
+      "id": "audio-lsb-analysis",
+      "purpose": "Add the next audio-focused analyzer package after image-container analysis is stable.",
+      "allowed_work": [
+        "WAV PCM sample LSB analysis",
+        "focused analyzer tests"
+      ],
+      "blocked_work": [
+        "broad media pipeline rewrites before Rust-side ingestion is selected"
+      ],
+      "exit_criteria": [
+        "WAV PCM LSB analyzer exists",
+        "audio analyzer tests pass"
+      ]
+    },
+    {
+      "id": "rust-side-ingestion",
+      "purpose": "Move large media ingestion to Rust-side file handling.",
+      "allowed_work": [
+        "IPC boundary hardening",
+        "local file handling",
+        "command-level validation"
+      ],
+      "blocked_work": [
+        "cloud upload or external service dependencies"
+      ],
+      "exit_criteria": [
+        "frontend no longer sends large byte arrays over IPC",
+        "command-level tests cover attach and analyze behavior"
+      ]
+    },
+    {
+      "id": "release-readiness",
+      "purpose": "Prepare the desktop app for a public-safe release handoff.",
+      "allowed_work": [
+        "documentation",
+        "packaging checks",
+        "security review"
+      ],
+      "blocked_work": [
+        "new analyzer families without a selected phase"
+      ],
+      "exit_criteria": [
+        "release checklist is complete",
+        "local-only safety assumptions are documented"
+      ]
+    }
+  ],
+  "required_gates": [
+    {
+      "id": "frontend-build-passes",
+      "status": "machine-check",
+      "required_for_transition": true,
+      "description": "The existing frontend build command must pass.",
+      "evidence": [
+        "npm run build"
+      ]
+    },
+    {
+      "id": "rust-analyzer-tests-exist",
+      "status": "pending",
+      "required_for_transition": true,
+      "description": "Rust analyzer tests must exist for the selected container-side-channel package.",
+      "evidence": [
+        "src-tauri/src/domain/analyzer.rs"
+      ],
+      "on_failure": "Stay in container-side-channels and add focused Rust analyzer tests."
+    },
+    {
+      "id": "jpeg-segment-analyzer-exists",
+      "status": "pending",
+      "required_for_transition": true,
+      "description": "The JPEG COM/APPn/EXIF/XMP/IPTC/after-EOI analyzer must exist.",
+      "evidence": [
+        "src-tauri/src/domain/analyzer.rs"
+      ],
+      "on_failure": "Implement the JPEG segment analyzer before phase transition."
+    },
+    {
+      "id": "png-deep-container-scan-exists",
+      "status": "pending",
+      "required_for_transition": true,
+      "description": "The PNG zTXt/iTXt and after-IEND scan must exist.",
+      "evidence": [
+        "src-tauri/src/domain/analyzer.rs"
+      ],
+      "on_failure": "Implement the PNG deep container scan before phase transition."
+    }
+  ]
+}
