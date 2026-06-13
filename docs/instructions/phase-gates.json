@@ -92,31 +92,34 @@
     },
     {
       "id": "rust-analyzer-tests-exist",
-      "status": "pending",
+      "status": "machine-check",
       "required_for_transition": true,
       "description": "Rust analyzer tests must exist for the selected container-side-channel package.",
       "evidence": [
-        "src-tauri/src/domain/analyzer.rs"
+        "src-tauri/src/domain/analyzer.rs",
+        "cargo test --manifest-path src-tauri/Cargo.toml"
       ],
       "on_failure": "Stay in container-side-channels and add focused Rust analyzer tests."
     },
     {
       "id": "jpeg-segment-analyzer-exists",
-      "status": "pending",
+      "status": "machine-check",
       "required_for_transition": true,
       "description": "The JPEG COM/APPn/EXIF/XMP/IPTC/after-EOI analyzer must exist.",
       "evidence": [
-        "src-tauri/src/domain/analyzer.rs"
+        "src-tauri/src/domain/analyzer.rs",
+        "src-tauri/src/domain/analyzer_pipeline.rs"
       ],
       "on_failure": "Implement the JPEG segment analyzer before phase transition."
     },
     {
       "id": "png-deep-container-scan-exists",
-      "status": "pending",
+      "status": "machine-check",
       "required_for_transition": true,
       "description": "The PNG zTXt/iTXt and after-IEND scan must exist.",
       "evidence": [
-        "src-tauri/src/domain/analyzer.rs"
+        "src-tauri/src/domain/analyzer.rs",
+        "src-tauri/src/domain/analyzer_pipeline.rs"
       ],
       "on_failure": "Implement the PNG deep container scan before phase transition."
     }
