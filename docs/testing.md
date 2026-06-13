@@ -19,8 +19,11 @@ run only when dependencies need to be installed locally.
 
 ## Existing Coverage
 
-Rust analyzer unit tests live inline in `src-tauri/src/domain/analyzer.rs`. They
-cover representative payload extraction behavior, including:
+Rust analyzer unit tests live inline in `src-tauri/src/domain/analyzer.rs`. The
+cross-analyzer registry and finalization functions live in
+`src-tauri/src/domain/analyzer_pipeline.rs` and are exercised by those analyzer
+tests plus command-level tests. Existing tests cover representative payload
+extraction behavior, including:
 
 - RGB LSB extraction from image streams.
 - Non-image media ignored by image-only analyzers.

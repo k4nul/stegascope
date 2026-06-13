@@ -16,8 +16,9 @@ StegaScope is split across a React frontend and a Rust/Tauri backend:
   commands.
 - `src-tauri/src/lib.rs` registers the Tauri commands, owns the in-memory task
   store, and translates between command inputs and domain objects.
-- `src-tauri/src/domain/` holds loaders, analyzers, task state, media metadata,
-  and extracted-file metadata.
+- `src-tauri/src/domain/` holds loaders, analyzer implementations, analyzer
+  pipeline registration/finalization, task state, media metadata, and
+  extracted-file metadata.
 
 The frontend and Rust backend communicate through Tauri IPC. Keep user interface
 state and presentation logic in `src/`, and keep file loading, analyzer behavior,
@@ -68,7 +69,9 @@ generic binary loader.
 
 ## Analyzer Set
 
-`default_analyzers()` currently registers:
+`src-tauri/src/domain/analyzer_pipeline.rs` owns the default analyzer registry
+and cross-analyzer payload finalization. `default_analyzers()` currently
+registers:
 
 - `metadata-analyzer`: scans PNG metadata and tagged side channels.
 - `png-container-analyzer`: scans payload bytes appended after the structural
@@ -93,6 +96,7 @@ Use these files first when investigating changes:
 - UI workflow: `src/App.tsx`
 - IPC type contract: `src/api/analysis.ts`
 - Command handlers and task store: `src-tauri/src/lib.rs`
+- Analyzer registry and finalization: `src-tauri/src/domain/analyzer_pipeline.rs`
 - Analyzer behavior and tests: `src-tauri/src/domain/analyzer.rs`
 - Loader routing: `src-tauri/src/domain/file_loader.rs`
 - Tauri dev/build settings: `src-tauri/tauri.conf.json`

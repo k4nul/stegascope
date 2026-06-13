@@ -88,8 +88,9 @@ See [Testing](docs/testing.md) for when each command is appropriate.
 - `src/api/analysis.ts`: typed frontend wrappers around Tauri IPC commands.
 - `src-tauri/src/lib.rs`: Tauri command registration, task store, and command
   handlers.
-- `src-tauri/src/domain/`: Rust domain modules for loaders, tasks, analyzers,
-  extracted files, and media file metadata.
+- `src-tauri/src/domain/`: Rust domain modules for loaders, tasks, analyzer
+  implementations, analyzer pipeline registration/finalization, extracted
+  files, and media file metadata.
 - `src-tauri/tauri.conf.json`: Tauri app, dev server, build, bundle, and window
   configuration.
 
