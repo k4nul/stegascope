@@ -38,7 +38,7 @@ memory by the Tauri state object, so it is not persisted across app restarts.
 
 ## Command Surface
 
-The frontend wrappers in `src/api/analysis.ts` call these Rust commands:
+Registered Rust commands include:
 
 - `create_task`: validates required case fields and creates an in-memory task.
 - `attach_media_file`: validates task ID, file name, and non-empty bytes; creates
@@ -48,8 +48,11 @@ The frontend wrappers in `src/api/analysis.ts` call these Rust commands:
 - `get_extracted_files`: returns the extracted file metadata for a task.
 - `download_extracted_file`: writes a selected extracted payload to the chosen
   target path.
-- `bootstrap_status`: reports app/package status, but the current UI does not
-  call it.
+- `bootstrap_status`: reports app/package status.
+
+The frontend wrappers in `src/api/analysis.ts` currently cover all listed
+commands except `bootstrap_status`, which is registered in Rust but not called by
+the current UI.
 
 When adding a new command, update both `src/api/analysis.ts` and the
 `tauri::generate_handler!` list in `src-tauri/src/lib.rs`.
@@ -66,6 +69,11 @@ The frontend infers a media type from common file extensions when the browser
 does not provide one. Unsupported extensions fall back to
 `application/octet-stream`, which the Rust loader rejects because there is no
 generic binary loader.
+
+Audio and video files are loadable carrier types, but the current analyzer set
+does not include WAV PCM sample LSB analysis. Non-image carriers can still be
+processed by byte-oriented analyzers such as embedded signature scanning; the
+audio-specific LSB package is the next gated phase.
 
 ## Analyzer Set
 

@@ -54,6 +54,12 @@ For documentation-only changes:
 git diff --check
 ```
 
+Documentation-only validation does not satisfy the phase transition gate. Before
+changing `current_phase` in `docs/instructions/phase-gates.json`, rerun the
+manifest's transition validation command and the Rust analyzer checks that prove
+the selected analyzer package. See
+[Analyzer Phase Readiness](phase-readiness.md) for the current evidence map.
+
 For frontend UI or IPC wrapper changes:
 
 ```bash
