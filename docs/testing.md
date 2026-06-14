@@ -29,6 +29,7 @@ extraction behavior, including:
 - Non-image media ignored by image-only analyzers.
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
+- Compressed PNG `zTXt`/`iTXt` metadata payload extraction.
 - PNG after-IEND packet and signature candidate extraction.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   malformed segment safety, and scan-data isolation.

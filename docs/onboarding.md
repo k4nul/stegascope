@@ -73,7 +73,8 @@ generic binary loader.
 and cross-analyzer payload finalization. `default_analyzers()` currently
 registers:
 
-- `metadata-analyzer`: scans PNG metadata and tagged side channels.
+- `metadata-analyzer`: scans PNG metadata and tagged side channels, including
+  compressed `zTXt` and `iTXt` text payloads.
 - `png-container-analyzer`: scans payload bytes appended after the structural
   PNG `IEND` chunk.
 - `jpeg-segment-analyzer`: scans marker-delimited JPEG COM/APP segment data and

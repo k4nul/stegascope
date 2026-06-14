@@ -1,6 +1,9 @@
+use std::borrow::Cow;
 use std::error::Error;
 use std::fmt::{self, Display, Formatter};
+use std::io::Read;
 
+use flate2::read::ZlibDecoder;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
@@ -572,6 +575,7 @@ fn extract_embedded_signature_payloads(
 const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1A\n";
 const JPEG_SOI: &[u8; 2] = b"\xFF\xD8";
 const JPEG_EOI: &[u8; 2] = b"\xFF\xD9";
+const MAX_DECOMPRESSED_PNG_TEXT_BYTES: usize = 2 * 1024 * 1024;
 
 fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<ExtractedPayload> {
     if !media.bytes.starts_with(PNG_SIGNATURE) {
@@ -582,21 +586,27 @@ fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<Ex
     let mut fallback_payloads = Vec::new();
 
     for chunk in png_metadata_chunks(&media.bytes) {
-        verified_payloads.extend(find_stegascope_packet_candidates(chunk.data, analyzer_name));
-
         let prefix = format!(
             "metadata_png_{}_chunk_{}",
             png_chunk_type_label(chunk.kind),
             chunk.index
         );
-        fallback_payloads.extend(signature_payload_candidates(
-            chunk.data,
-            None,
-            &prefix,
-            0,
-            SuspiciousLevel::High,
-            analyzer_name,
-        ));
+
+        for payload_bytes in png_metadata_payload_views(chunk.kind, chunk.data) {
+            let payload_bytes = payload_bytes.as_ref();
+            verified_payloads.extend(find_stegascope_packet_candidates(
+                payload_bytes,
+                analyzer_name,
+            ));
+            fallback_payloads.extend(signature_payload_candidates(
+                payload_bytes,
+                None,
+                &prefix,
+                0,
+                SuspiciousLevel::High,
+                analyzer_name,
+            ));
+        }
     }
 
     payloads_prefer_verified(verified_payloads, fallback_payloads)
@@ -978,6 +988,97 @@ fn png_chunk_type_label(kind: &[u8]) -> String {
             }
         })
         .collect()
+}
+
+fn png_metadata_payload_views<'a>(kind: &[u8], data: &'a [u8]) -> Vec<Cow<'a, [u8]>> {
+    if let Some(text_payload) = png_text_payload_view(kind, data) {
+        return vec![text_payload];
+    }
+
+    vec![Cow::Borrowed(data)]
+}
+
+fn png_text_payload_view<'a>(kind: &[u8], data: &'a [u8]) -> Option<Cow<'a, [u8]>> {
+    match kind {
+        b"tEXt" => png_text_payload(data).map(Cow::Borrowed),
+        b"zTXt" => decoded_ztxt_text(data).map(Cow::Owned),
+        b"iTXt" => itxt_text_payload(data),
+        _ => None,
+    }
+}
+
+fn png_text_payload(data: &[u8]) -> Option<&[u8]> {
+    let keyword_end = data.iter().position(|byte| *byte == 0)?;
+    let text_start = keyword_end.checked_add(1)?;
+
+    (text_start <= data.len()).then_some(&data[text_start..])
+}
+
+fn decoded_ztxt_text(data: &[u8]) -> Option<Vec<u8>> {
+    let keyword_end = data.iter().position(|byte| *byte == 0)?;
+    let compression_method_offset = keyword_end.checked_add(1)?;
+    let compressed_text_start = compression_method_offset.checked_add(1)?;
+
+    if compressed_text_start > data.len() || data[compression_method_offset] != 0 {
+        return None;
+    }
+
+    inflate_zlib_limited(&data[compressed_text_start..])
+}
+
+fn itxt_text_payload(data: &[u8]) -> Option<Cow<'_, [u8]>> {
+    let keyword_end = data.iter().position(|byte| *byte == 0)?;
+    let compression_flag_offset = keyword_end.checked_add(1)?;
+    let compression_method_offset = compression_flag_offset.checked_add(1)?;
+    let mut offset = compression_method_offset.checked_add(1)?;
+
+    if offset > data.len() {
+        return None;
+    }
+
+    let compression_flag = data[compression_flag_offset];
+    let compression_method = data[compression_method_offset];
+    if !matches!(compression_flag, 0 | 1) || compression_method != 0 {
+        return None;
+    }
+
+    let language_tag_end = data[offset..]
+        .iter()
+        .position(|byte| *byte == 0)
+        .and_then(|position| offset.checked_add(position))?;
+    offset = language_tag_end.checked_add(1)?;
+
+    let translated_keyword_end = data[offset..]
+        .iter()
+        .position(|byte| *byte == 0)
+        .and_then(|position| offset.checked_add(position))?;
+    let compressed_text_start = translated_keyword_end.checked_add(1)?;
+
+    if compressed_text_start > data.len() {
+        return None;
+    }
+
+    let text = &data[compressed_text_start..];
+
+    if compression_flag == 0 {
+        Some(Cow::Borrowed(text))
+    } else {
+        inflate_zlib_limited(text).map(Cow::Owned)
+    }
+}
+
+fn inflate_zlib_limited(compressed: &[u8]) -> Option<Vec<u8>> {
+    let decoder = ZlibDecoder::new(compressed);
+    let mut limited = decoder.take((MAX_DECOMPRESSED_PNG_TEXT_BYTES + 1) as u64);
+    let mut decoded = Vec::new();
+
+    limited.read_to_end(&mut decoded).ok()?;
+
+    if decoded.len() > MAX_DECOMPRESSED_PNG_TEXT_BYTES {
+        return None;
+    }
+
+    Some(decoded)
 }
 
 fn signature_payload_candidates(
@@ -1431,6 +1532,9 @@ mod tests {
     use super::*;
 
     use super::super::analyzer_pipeline::extract_payload_candidates;
+    use std::io::Write;
+
+    use flate2::{write::ZlibEncoder, Compression};
     use image::ImageEncoder;
 
     #[test]
@@ -1504,7 +1608,7 @@ mod tests {
             .expect("expected metadata signature payload");
 
         assert!(file.file_name.starts_with("metadata_png_text_chunk_"));
-        assert!(file.file_name.ends_with("_payload_8.pdf"));
+        assert!(file.file_name.ends_with("_payload_0.pdf"));
         assert_eq!(file.analyzer_name, "metadata-analyzer");
         assert_eq!(file.suspicious_level, SuspiciousLevel::High);
         assert_eq!(file.validation_status, ValidationStatus::Validated);
@@ -1512,8 +1616,16 @@ mod tests {
 
     #[test]
     fn metadata_analyzer_extracts_valid_signature_from_supported_png_metadata_chunk_kinds() {
-        for (kind, label) in [(*b"iTXt", "itxt"), (*b"zTXt", "ztxt"), (*b"eXIf", "exif")] {
-            let chunk_data = png_text_chunk_data(b"Comment", valid_pdf_payload());
+        let cases = [
+            (
+                *b"iTXt",
+                png_uncompressed_itxt_chunk_data(b"Comment", valid_pdf_payload()),
+                "itxt",
+            ),
+            (*b"eXIf", valid_pdf_payload().to_vec(), "exif"),
+        ];
+
+        for (kind, chunk_data, label) in cases {
             let bytes = png_with_chunk(kind, &chunk_data);
             let media = LoadedMedia {
                 source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
@@ -1530,11 +1642,98 @@ mod tests {
             assert!(file
                 .file_name
                 .starts_with(&format!("metadata_png_{label}_chunk_")));
-            assert!(file.file_name.ends_with("_payload_8.pdf"));
+            assert!(file.file_name.ends_with("_payload_0.pdf"));
             assert_eq!(file.analyzer_name, "metadata-analyzer");
             assert_eq!(file.suspicious_level, SuspiciousLevel::High);
             assert_eq!(file.validation_status, ValidationStatus::Validated);
         }
+    }
+
+    #[test]
+    fn metadata_analyzer_extracts_valid_signature_from_compressed_png_text_chunks() {
+        let cases = [
+            (
+                *b"zTXt",
+                png_ztxt_chunk_data(b"Comment", valid_pdf_payload()),
+                "ztxt",
+            ),
+            (
+                *b"iTXt",
+                png_compressed_itxt_chunk_data(b"Comment", valid_pdf_payload()),
+                "itxt",
+            ),
+        ];
+
+        for (kind, chunk_data, label) in cases {
+            let bytes = png_with_chunk(kind, &chunk_data);
+            let media = LoadedMedia {
+                source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+                bytes,
+            };
+
+            let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+            let file = outcome
+                .extracted_files
+                .iter()
+                .find(|file| file.file_type == "application/pdf")
+                .expect("expected compressed PNG text signature payload");
+
+            assert_eq!(
+                file.file_name,
+                format!("metadata_png_{label}_chunk_1_payload_0.pdf")
+            );
+            assert_eq!(file.analyzer_name, "metadata-analyzer");
+            assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+            assert_eq!(file.validation_status, ValidationStatus::Validated);
+        }
+    }
+
+    #[test]
+    fn metadata_analyzer_extracts_packet_payload_from_compressed_png_itxt_chunk() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("compressed_itxt_note.pdf", secret);
+        let bytes = png_with_chunk(
+            *b"iTXt",
+            &png_compressed_itxt_chunk_data(b"StegaScope", &packet),
+        );
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "compressed_itxt_note.pdf")
+            .expect("expected compressed iTXt packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "metadata-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn default_pipeline_extracts_packet_payload_from_compressed_png_ztxt_chunk() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("compressed_ztxt_note.pdf", secret);
+        let bytes = png_with_chunk(*b"zTXt", &png_ztxt_chunk_data(b"StegaScope", &packet));
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let payloads = extract_payload_candidates(&media).unwrap();
+        let payload = payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "compressed_ztxt_note.pdf")
+            .expect("expected default pipeline compressed zTXt packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "metadata-analyzer");
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
     }
 
     #[test]
@@ -1598,7 +1797,7 @@ mod tests {
         let signature_chunk = png_text_chunk_data(b"Comment", valid_pdf_payload());
         let secret = b"\x89PNG\r\n\x1A\nverified-metadata-payload";
         let packet = stegascope_packet("metadata_blueprint.png", secret);
-        let packet_chunk = png_text_chunk_data(b"StegaScope", &packet);
+        let packet_chunk = png_uncompressed_itxt_chunk_data(b"StegaScope", &packet);
         let bytes = png_with_chunks(&[
             (*b"tEXt", signature_chunk.as_slice()),
             (*b"iTXt", packet_chunk.as_slice()),
@@ -2171,6 +2370,49 @@ mod tests {
         chunk_data.push(0);
         chunk_data.extend_from_slice(payload);
         chunk_data
+    }
+
+    fn png_ztxt_chunk_data(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(keyword);
+        chunk_data.push(0);
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(&zlib_compress(payload));
+        chunk_data
+    }
+
+    fn png_uncompressed_itxt_chunk_data(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(keyword);
+        chunk_data.push(0);
+        chunk_data.push(0);
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(b"en");
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(b"Comment");
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(payload);
+        chunk_data
+    }
+
+    fn png_compressed_itxt_chunk_data(keyword: &[u8], payload: &[u8]) -> Vec<u8> {
+        let mut chunk_data = Vec::new();
+        chunk_data.extend_from_slice(keyword);
+        chunk_data.push(0);
+        chunk_data.push(1);
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(b"en");
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(b"Comment");
+        chunk_data.push(0);
+        chunk_data.extend_from_slice(&zlib_compress(payload));
+        chunk_data
+    }
+
+    fn zlib_compress(payload: &[u8]) -> Vec<u8> {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder.write_all(payload).unwrap();
+        encoder.finish().unwrap()
     }
 
     fn png_with_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
