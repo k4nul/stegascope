@@ -18,6 +18,28 @@ If startup fails:
    failures.
 4. Run `cargo check --manifest-path src-tauri/Cargo.toml` to check the Rust side.
 
+## Frontend Build Reports `tsc: not found`
+
+`npm run build` starts with `tsc && vite build`. If the shell reports
+`tsc: not found`, the local Node dependencies are not installed in the checkout.
+Run setup first:
+
+```bash
+npm install
+```
+
+Then rerun:
+
+```bash
+npm run build
+```
+
+Do not edit dependency manifests to fix this blocker unless the dependency set
+itself is changing.
+
+If `npm ci` cannot resolve `registry.npmjs.org`, fix network or DNS access and
+rerun setup before treating the frontend build as a project failure.
+
 ## File Selection Fails With Unsupported Media Type
 
 The UI accepts image, audio, and video files. The Rust loader supports media
@@ -62,6 +84,11 @@ For JPEG segment analysis, candidates are limited to valid COM/APP segment data
 or bytes appended after the structural EOI marker. Payload-like bytes inside
 scan image data, malformed segments, or non-JPEG bytes are ignored.
 
+For audio and video carriers, the current loaders can attach the file bytes, but
+the registered LSB analyzers are image-focused. Byte-oriented embedded signature
+scanning may still report known payload signatures, while WAV PCM sample LSB
+analysis is reserved for the next analyzer phase.
+
 ## Task Not Found
 
 Task IDs exist only in the running desktop session. Restarting the app clears the
@@ -95,3 +122,22 @@ Then rerun packaging:
 ```bash
 npm run tauri -- build
 ```
+
+## Rust/Tauri Checks Cannot Find `pkg-config`
+
+`cargo check --manifest-path src-tauri/Cargo.toml` and
+`cargo test --manifest-path src-tauri/Cargo.toml` compile the Tauri stack before
+running project tests. On Linux, the build can fail in native system crates if
+`pkg-config` is missing or cannot find `glib-2.0`.
+
+Install the missing system build tooling outside the repository, then rerun the
+Rust command. Do not commit generated `src-tauri/target/` output from failed or
+successful local builds.
+
+If the blocked Rust command is being used as phase-transition evidence, update
+the validation notes in [Analyzer Phase Readiness](phase-readiness.md) only
+after rerunning the command.
+
+If Cargo cannot resolve `index.crates.io`, fix network or DNS access first. That
+failure happens before Rust dependency compilation and does not prove whether
+project code or system libraries pass.

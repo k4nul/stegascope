@@ -6,21 +6,24 @@ an MVP direction until the product direction is selected.
 
 ## Automation State
 
-`.codex/automation.yaml` marks automation as prepared but disabled:
+No public CI or release automation configuration is checked into the tree. The
+repository intentionally ignores private local maintainer files:
 
-- `automation.enabled` is `false`.
-- The activation state is `disabled_until_product_direction_is_selected`.
-- Jobs for frontend build, Rust check, and Tauri packaging are present but
-  disabled.
+- `AGENTS.md`
+- `.codex/`
+- `docs/management/`
 
-Do not change those settings during ordinary documentation, test, lint, or
-implementation maintenance. Activation requires a product direction decision,
-setting `automation.enabled` to `true`, selecting at least one trigger, and
-enabling the required jobs.
+Do not add or track those private files during ordinary documentation, test,
+lint, or implementation maintenance. Checked-in phase guidance lives in
+`docs/instructions/phase-gates.json` and may be read by local maintainer tooling,
+but phase state must not be changed unless the manifest validation command and
+required evidence gates pass. Public automation activation still requires a
+product direction decision and an explicit tracked configuration in a future
+change.
 
 ## Safe Edit Boundaries
 
-Follow the local maintainer policy in `AGENTS.md`:
+Follow these repository boundaries:
 
 - Preserve the Tauri v2 structure.
 - Keep frontend and Rust backend boundaries clear.
@@ -44,6 +47,11 @@ domain model. Before using them as architecture references, compare them with
 `src-tauri/src/domain/` and regenerate the exports from the diagram source or
 replace them with a maintained architecture document.
 
+For phase evidence and the transition boundary between
+`container-side-channels` and `audio-lsb-analysis`, keep
+[Analyzer Phase Readiness](phase-readiness.md) in sync with
+`docs/instructions/phase-gates.json` and the Rust analyzer registry.
+
 ## Validation Policy
 
 Use the narrowest command that matches the touched scope:
@@ -60,6 +68,8 @@ Document any skipped validation with the exact blocker.
 
 - Product direction is not selected.
 - Automation remains disabled by design.
+- Phase transition out of `container-side-channels` still requires a fresh
+  `npm run build` result plus the required analyzer evidence gates.
 - Command-level Rust coverage is partial; attach and analyze command flow has
   initial tests, while create/list/download command paths still need coverage.
 - Frontend UI/API flow tests are missing.

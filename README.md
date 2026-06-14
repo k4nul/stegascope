@@ -16,9 +16,13 @@ or generated desktop bundles.
 
 ## Project Status
 
-The repository is direction-pending. Local automation is prepared but disabled
-until a product direction is selected, so documentation should describe the
-current implementation without locking in the MVP roadmap.
+The repository is direction-pending. No public CI or release automation
+configuration is checked into the tree; validation is manual/local until a
+product direction is selected. Checked-in phase guidance lives in
+`docs/instructions/phase-gates.json` and is used by local maintainer tooling to
+route analyzer-expansion work, while private maintainer overlays, when present,
+stay ignored by Git. Documentation should describe the current implementation
+without locking in the MVP roadmap.
 
 Current implementation facts:
 
@@ -29,6 +33,9 @@ Current implementation facts:
   embedded file signatures, JPEG COM/APP segment and after-EOI payload data, RGB
   LSB streams, two-bit-per-pixel LSB strategies, and verified StegaScope
   packets.
+- Audio and video files can be attached through MIME-prefix loaders, but WAV PCM
+  sample LSB analysis is not implemented yet; it remains the next gated analyzer
+  phase.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; initial command-level Rust tests cover attach
   and analyze command flow; frontend UI/API flow tests are still missing.
@@ -43,6 +50,8 @@ Current implementation facts:
   workflow failures.
 - [Maintenance](docs/maintenance.md): automation posture, safe edit boundaries,
   and documentation upkeep notes.
+- [Analyzer Phase Readiness](docs/phase-readiness.md): checked-in phase evidence
+  and the boundary before audio LSB analysis.
 - `docs/stegascope_class_diagram_after_factory.svg` and `.png`: existing class
   diagram exports. Treat them as historical references until regenerated from
   current code.
@@ -98,10 +107,12 @@ See [Testing](docs/testing.md) for when each command is appropriate.
 ## Suggested Next Steps
 
 1. Select and document the MVP product direction before enabling automation.
-2. Move large media ingestion closer to Rust so desktop file paths can be read
+2. Clear the frontend build dependency/tooling blocker before attempting a phase
+   transition out of `container-side-channels`.
+3. Move large media ingestion closer to Rust so desktop file paths can be read
    without sending full `number[]` payloads over Tauri IPC.
-3. Split frontend analysis surfaces into feature modules once the workflow is
+4. Split frontend analysis surfaces into feature modules once the workflow is
    accepted.
-4. Add command-level Rust tests and critical UI/API flow coverage.
-5. Regenerate the class diagram exports from current code or replace them with a
+5. Add command-level Rust tests and critical UI/API flow coverage.
+6. Regenerate the class diagram exports from current code or replace them with a
    source-controlled architecture note.

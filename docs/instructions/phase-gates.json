@@ -97,6 +97,15 @@
       "description": "Rust analyzer tests must exist for the selected container-side-channel package.",
       "evidence": [
         "src-tauri/src/domain/analyzer.rs",
+        "metadata_analyzer_extracts_valid_signature_from_compressed_png_text_chunks",
+        "metadata_analyzer_extracts_packet_payload_from_compressed_png_itxt_chunk",
+        "default_pipeline_extracts_packet_payload_from_compressed_png_ztxt_chunk",
+        "png_container_analyzer_extracts_packet_payload_after_iend",
+        "png_container_analyzer_uses_structural_iend_for_trailing_payload",
+        "jpeg_segment_analyzer_extracts_packet_payload_from_comment_segment",
+        "jpeg_segment_analyzer_extracts_valid_signature_after_eoi",
+        "jpeg_segment_analyzer_does_not_scan_sos_image_data_as_segment_payload",
+        "jpeg_segment_analyzer_handles_malformed_segment_lengths",
         "cargo test --manifest-path src-tauri/Cargo.toml"
       ],
       "on_failure": "Stay in container-side-channels and add focused Rust analyzer tests."
@@ -105,12 +114,16 @@
       "id": "jpeg-segment-analyzer-exists",
       "status": "machine-check",
       "required_for_transition": true,
-      "description": "The JPEG COM/APPn/EXIF/XMP/IPTC/after-EOI analyzer must exist.",
+      "description": "The JPEG COM/APP0-APP15 segment and after-EOI payload analyzer must exist.",
       "evidence": [
         "src-tauri/src/domain/analyzer.rs",
-        "src-tauri/src/domain/analyzer_pipeline.rs"
+        "src-tauri/src/domain/analyzer_pipeline.rs",
+        "JpegSegmentAnalyzer",
+        "extract_jpeg_segment_payloads",
+        "jpeg_payload_segments",
+        "jpeg_after_eoi_payload"
       ],
-      "on_failure": "Implement the JPEG segment analyzer before phase transition."
+      "on_failure": "Implement the JPEG COM/APP segment and after-EOI analyzer before phase transition."
     },
     {
       "id": "png-deep-container-scan-exists",
@@ -119,7 +132,13 @@
       "description": "The PNG zTXt/iTXt and after-IEND scan must exist.",
       "evidence": [
         "src-tauri/src/domain/analyzer.rs",
-        "src-tauri/src/domain/analyzer_pipeline.rs"
+        "src-tauri/src/domain/analyzer_pipeline.rs",
+        "png_metadata_payload_views",
+        "decoded_ztxt_text",
+        "itxt_text_payload",
+        "PngContainerAnalyzer",
+        "extract_png_container_payloads",
+        "png_after_iend_payload"
       ],
       "on_failure": "Implement the PNG deep container scan before phase transition."
     }
