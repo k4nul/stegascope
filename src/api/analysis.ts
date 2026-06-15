@@ -107,7 +107,7 @@ export const downloadExtractedFile = async (
   });
 };
 
-const inferMediaType = (fileName: string) => {
+const inferMediaType = (fileName: string): string => {
   const extension = fileName.split(".").pop()?.toLowerCase();
 
   switch (extension) {

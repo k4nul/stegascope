@@ -39,7 +39,7 @@ type AnalysisTab = {
   extractedFiles: ExtractedFile[];
 };
 
-const todayForInput = () => {
+const todayForInput = (): string => {
   const date = new Date();
   date.setMinutes(date.getMinutes() - date.getTimezoneOffset());
   return date.toISOString().slice(0, 10);
@@ -61,10 +61,10 @@ const createTab = (id: number): AnalysisTab => ({
   extractedFiles: [],
 });
 
-const truncateTitle = (title: string) =>
+const truncateTitle = (title: string): string =>
   title.length > 22 ? `${title.slice(0, 22)}...` : title;
 
-const formatFileSize = (bytes: number) => {
+const formatFileSize = (bytes: number): string => {
   if (bytes < 1024) {
     return `${bytes} B`;
   }
@@ -81,7 +81,7 @@ const formatFileSize = (bytes: number) => {
   return `${value.toFixed(value >= 10 ? 1 : 2)} ${units[unitIndex]}`;
 };
 
-const formatCompletedAt = (value: string) => {
+const formatCompletedAt = (value: string): string => {
   if (!value.startsWith("unix:")) {
     return value;
   }
@@ -94,12 +94,12 @@ const formatCompletedAt = (value: string) => {
   return new Date(seconds * 1000).toLocaleString();
 };
 
-const defaultSaveName = (fileName: string) => {
+const defaultSaveName = (fileName: string): string => {
   const sanitized = fileName.replace(/[\\/:*?"<>|]/g, "_").trim();
   return sanitized || "extracted_payload";
 };
 
-const extensionFromFile = (file: ExtractedFile) => {
+const extensionFromFile = (file: ExtractedFile): string | null => {
   if (file.fileSignature.extension) {
     return file.fileSignature.extension;
   }
@@ -112,7 +112,9 @@ const extensionFromFile = (file: ExtractedFile) => {
   return null;
 };
 
-const saveFiltersFor = (file: ExtractedFile) => {
+const saveFiltersFor = (
+  file: ExtractedFile,
+): { name: string; extensions: string[] }[] => {
   const extension = extensionFromFile(file);
 
   return extension
@@ -140,13 +142,16 @@ function App() {
       activeTab.phase !== "creating",
   );
 
-  const patchTab = (tabId: number, patch: Partial<AnalysisTab>) => {
+  const patchTab = (tabId: number, patch: Partial<AnalysisTab>): void => {
     setTabs((prev) =>
       prev.map((tab) => (tab.id === tabId ? { ...tab, ...patch } : tab)),
     );
   };
 
-  const handleTaskFieldChange = (field: TaskFormField, value: string) => {
+  const handleTaskFieldChange = (
+    field: TaskFormField,
+    value: string,
+  ): void => {
     if (!activeTab || activeTab.taskId) {
       return;
     }
@@ -154,7 +159,7 @@ function App() {
     patchTab(activeTab.id, { [field]: value });
   };
 
-  const handleCreateTask = async () => {
+  const handleCreateTask = async (): Promise<void> => {
     if (!activeTab || !canCreateTask) {
       return;
     }
@@ -191,7 +196,7 @@ function App() {
     }
   };
 
-  const handleFileSelected = async (file: File) => {
+  const handleFileSelected = async (file: File): Promise<void> => {
     if (!activeTab?.taskId || activeTab.phase === "uploading") {
       return;
     }
@@ -222,7 +227,7 @@ function App() {
     }
   };
 
-  const handleAnalyze = async () => {
+  const handleAnalyze = async (): Promise<void> => {
     if (!activeTab?.taskId || !activeTab.mediaFile || activeTab.phase === "analyzing") {
       return;
     }
@@ -253,7 +258,9 @@ function App() {
     }
   };
 
-  const handleDownloadExtractedFile = async (file: ExtractedFile) => {
+  const handleDownloadExtractedFile = async (
+    file: ExtractedFile,
+  ): Promise<void> => {
     if (!activeTab?.taskId) {
       return;
     }
@@ -286,7 +293,7 @@ function App() {
     }
   };
 
-  const handleNewTab = () => {
+  const handleNewTab = (): void => {
     const id = nextTabIdRef.current;
     nextTabIdRef.current += 1;
 
@@ -294,7 +301,7 @@ function App() {
     setActiveTabId(id);
   };
 
-  const handleDeleteTab = (tabId: number) => {
+  const handleDeleteTab = (tabId: number): void => {
     setTabs((prev) => {
       if (prev.length === 1) {
         return prev;
