@@ -72,10 +72,11 @@ Document any skipped validation with the exact blocker.
 - Automation remains disabled by design.
 - Phase transition out of `container-side-channels` still requires a fresh
   `npm run build` result plus the required analyzer evidence gates.
-- The next analyzer and ingestion phases still require implementation evidence:
-  WAV PCM LSB analysis needs source and Rust test coverage, and large media
-  ingestion needs an IPC boundary change. Do not close those gates with
-  documentation-only updates.
+- The next ingestion phase still requires implementation evidence: large media
+  ingestion needs an IPC boundary change. The WAV PCM LSB analyzer has source
+  and Rust test coverage, but phase state must still wait for a passing
+  transition validation run. Do not close either gate with documentation-only
+  updates.
 - Command-level Rust coverage is partial; attach and analyze command flow has
   initial tests, while create/list/download command paths still need coverage.
 - Frontend UI/API flow tests are missing.

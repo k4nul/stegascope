@@ -1,7 +1,8 @@
 # Analyzer Phase Readiness
 
 This note records the documentation-facing evidence for the current
-`container-side-channels` phase and the boundary before `audio-lsb-analysis`.
+`container-side-channels` phase, the boundary before `audio-lsb-analysis`, and
+the pre-transition audio analyzer evidence that already exists in source.
 It is not a phase transition record; `current_phase` stays unchanged until the
 transition validation command and required analyzer evidence gates pass locally.
 
@@ -19,6 +20,18 @@ The current phase covers the first image-container analyzer package:
 - JPEG payload bytes appended after the structural EOI marker.
 - PNG compressed `zTXt` and `iTXt` text payload scanning.
 - PNG payload bytes appended after the structural `IEND` chunk.
+
+## Pre-Transition Audio Evidence
+
+`src-tauri/src/domain/analyzer.rs` also defines `WavPcmLsbAnalyzer` for
+uncompressed PCM WAV carriers, and `src-tauri/src/domain/analyzer_pipeline.rs`
+registers it in the default analyzer set. The focused tests cover verified
+packet recovery, signature-only fallback extraction, default pipeline
+registration, and unsupported or truncated WAV safety.
+
+This evidence does not move `current_phase` by itself. The phase state stays
+`container-side-channels` until the manifest transition validation command and
+required gate review pass locally.
 
 ## Source Evidence
 
@@ -61,19 +74,20 @@ Do not move `current_phase` to `audio-lsb-analysis` until:
    the source after any analyzer changes.
 
 The next phase is intentionally narrower than the full media-analysis catalog.
-It should add WAV PCM sample LSB analysis and focused tests without rewriting the
-large-media ingestion path. Rust-side file ingestion remains a later phase.
+Its source package now exists as a focused WAV PCM sample LSB analyzer with Rust
+tests, without rewriting the large-media ingestion path. Rust-side file
+ingestion remains a later phase.
 
 ## Remaining Implementation Work
 
-The checked-in `container-side-channels` source gates are present, but the next
-analyzer package is still implementation work: add WAV PCM sample LSB analysis
-with focused Rust tests. A later ingestion phase should also change the current
-frontend IPC boundary so large media files are not sent as `number[]` payloads
-through `src/api/analysis.ts`.
+The checked-in `container-side-channels` source gates are present, and the WAV
+PCM sample LSB source/test package now exists as pre-transition audio evidence.
+The next implementation boundary is still the later ingestion phase: change the
+current frontend IPC boundary so large media files are not sent as `number[]`
+payloads through `src/api/analysis.ts`.
 
-Do not use this documentation note to mark either item complete. The WAV PCM
-gate needs source and test evidence in the Rust analyzer layer, while the IPC
+Do not use this documentation note to advance phase state or close the ingestion
+gate. Phase state still needs a passing transition validation run, and the IPC
 boundary gate needs an implementation change across `src/api/analysis.ts` and
 the Tauri command surface.
 
@@ -85,8 +99,8 @@ the exact validation commands for each gate, and records the remaining boundary
 before `audio-lsb-analysis`.
 
 The handoff does not replace source or test evidence. Updating this note without
-a passing transition validation run does not advance `current_phase`, implement
-WAV PCM LSB analysis, or change the large-media IPC boundary.
+a passing transition validation run does not advance `current_phase` or change
+the large-media IPC boundary.
 
 ## Known Local Validation Blockers
 

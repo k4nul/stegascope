@@ -447,6 +447,64 @@ impl FileAnalyzer for Lsb2bppAnalyzer {
     }
 }
 
+#[derive(Debug)]
+pub struct WavPcmLsbAnalyzer {
+    base: BaseFileAnalyzer,
+}
+
+impl Default for WavPcmLsbAnalyzer {
+    fn default() -> Self {
+        Self {
+            base: BaseFileAnalyzer::new("wav-pcm-lsb-analyzer")
+                .with_version("0.1.0")
+                .with_description(
+                    "Extracts least-significant-bit streams from PCM WAV sample data.",
+                ),
+        }
+    }
+}
+
+impl FileAnalyzer for WavPcmLsbAnalyzer {
+    fn base(&self) -> &BaseFileAnalyzer {
+        &self.base
+    }
+
+    fn analyze(&self, media: &LoadedMedia) -> Result<AnalysisOutcome, AnalysisError> {
+        let Some(wav) = wav_pcm_data(&media.bytes) else {
+            return Ok(AnalysisOutcome::default());
+        };
+
+        let bits = extract_wav_pcm_lsb_bits(wav);
+        if bits.len() < 8 {
+            return Ok(AnalysisOutcome::default());
+        }
+
+        let mut verified_payloads = Vec::new();
+        let mut fallback_payloads = Vec::new();
+
+        for bit_packing in [BitPacking::MsbFirst, BitPacking::LsbFirst] {
+            let decoded = bits_to_bytes(&bits, bit_packing, MAX_LSB_BYTES_TO_SCAN);
+            let verified = find_stegascope_packet_candidates(&decoded, self.name());
+
+            if verified.is_empty() {
+                fallback_payloads.extend(find_lsb_signature_payload_candidates(
+                    &decoded,
+                    bit_packing,
+                    "wav_pcm_lsb",
+                    self.name(),
+                ));
+            } else {
+                verified_payloads.extend(verified);
+            }
+        }
+
+        Ok(outcome_prefer_verified(
+            verified_payloads,
+            fallback_payloads,
+        ))
+    }
+}
+
 fn extract_rgb_lsb_bits(image: &image::RgbaImage) -> Vec<u8> {
     let mut bits = Vec::with_capacity(image.width() as usize * image.height() as usize * 3);
 
@@ -520,6 +578,119 @@ fn extract_lsb2bpp_bits(image: &image::RgbaImage, strategy: Lsb2bppStrategy) -> 
     }
 
     bits
+}
+
+#[derive(Clone, Copy)]
+struct WavPcmData<'a> {
+    data: &'a [u8],
+    format: WavPcmFormat,
+}
+
+#[derive(Clone, Copy)]
+struct WavPcmFormat {
+    channels: u16,
+    bits_per_sample: u16,
+    block_align: u16,
+}
+
+fn wav_pcm_data(bytes: &[u8]) -> Option<WavPcmData<'_>> {
+    if bytes.len() < 12 || !bytes.starts_with(b"RIFF") || &bytes[8..12] != b"WAVE" {
+        return None;
+    }
+
+    let mut format = None;
+    let mut data = None;
+    let mut offset = 12;
+
+    while offset.checked_add(8)? <= bytes.len() {
+        let chunk_type = &bytes[offset..offset + 4];
+        let chunk_size = read_u32_le(bytes, offset + 4)? as usize;
+        let data_start = offset.checked_add(8)?;
+        let data_end = data_start.checked_add(chunk_size)?;
+        if data_end > bytes.len() {
+            return None;
+        }
+
+        match chunk_type {
+            b"fmt " => {
+                format = parse_wav_pcm_format(&bytes[data_start..data_end]);
+            }
+            b"data" if data.is_none() => {
+                data = Some(&bytes[data_start..data_end]);
+            }
+            _ => {}
+        }
+
+        if let (Some(format), Some(data)) = (format, data) {
+            return Some(WavPcmData { data, format });
+        }
+
+        offset = data_end.checked_add(chunk_size % 2)?;
+    }
+
+    Some(WavPcmData {
+        data: data?,
+        format: format?,
+    })
+}
+
+fn parse_wav_pcm_format(bytes: &[u8]) -> Option<WavPcmFormat> {
+    if bytes.len() < 16 {
+        return None;
+    }
+
+    let audio_format = read_u16_le(bytes, 0)?;
+    let channels = read_u16_le(bytes, 2)?;
+    let block_align = read_u16_le(bytes, 12)?;
+    let bits_per_sample = read_u16_le(bytes, 14)?;
+    let bytes_per_sample = usize::from(bits_per_sample.checked_div(8)?);
+    let expected_block_align = usize::from(channels).checked_mul(bytes_per_sample)?;
+
+    if audio_format != 1
+        || channels == 0
+        || !matches!(bits_per_sample, 8 | 16 | 24 | 32)
+        || expected_block_align == 0
+        || usize::from(block_align) != expected_block_align
+    {
+        return None;
+    }
+
+    Some(WavPcmFormat {
+        channels,
+        bits_per_sample,
+        block_align,
+    })
+}
+
+fn extract_wav_pcm_lsb_bits(wav: WavPcmData<'_>) -> Vec<u8> {
+    let bytes_per_sample = usize::from(wav.format.bits_per_sample / 8);
+    let block_align = usize::from(wav.format.block_align);
+    let channels = usize::from(wav.format.channels);
+    let frame_count = wav.data.len() / block_align;
+    let mut bits = Vec::with_capacity(frame_count * channels);
+
+    for frame in wav.data.chunks_exact(block_align) {
+        for channel in 0..channels {
+            let sample_offset = channel * bytes_per_sample;
+            bits.push(frame[sample_offset] & 1);
+        }
+    }
+
+    bits
+}
+
+fn read_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
+    let end = offset.checked_add(2)?;
+    let slice = bytes.get(offset..end)?;
+
+    Some(u16::from_le_bytes([slice[0], slice[1]]))
+}
+
+fn read_u32_le(bytes: &[u8], offset: usize) -> Option<u32> {
+    let end = offset.checked_add(4)?;
+    let slice = bytes.get(offset..end)?;
+
+    Some(u32::from_le_bytes([slice[0], slice[1], slice[2], slice[3]]))
 }
 
 fn bits_to_bytes(bits: &[u8], bit_packing: BitPacking, max_bytes: usize) -> Vec<u8> {
@@ -2077,6 +2248,92 @@ mod tests {
     }
 
     #[test]
+    fn wav_pcm_lsb_analyzer_extracts_packet_payload_from_16_bit_samples() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("wav_lsb_note.pdf", secret);
+        let bytes = wav_pcm_with_lsb_payload(&packet, BitPacking::MsbFirst, 16);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.wav", bytes.len() as u64, "audio/wav"),
+            bytes,
+        };
+
+        let outcome = WavPcmLsbAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "wav_lsb_note.pdf")
+            .expect("expected WAV PCM LSB packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "wav-pcm-lsb-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.file_size_bytes, secret.len() as u64);
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn wav_pcm_lsb_analyzer_extracts_valid_signature_from_8_bit_samples() {
+        let bytes = wav_pcm_with_lsb_payload(valid_pdf_payload(), BitPacking::MsbFirst, 8);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.wav", bytes.len() as u64, "audio/wav"),
+            bytes,
+        };
+
+        let outcome = WavPcmLsbAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "wav_pcm_lsb_msb_first_payload_0.pdf")
+            .expect("expected WAV PCM LSB PDF payload");
+
+        assert_eq!(file.analyzer_name, "wav-pcm-lsb-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn default_pipeline_extracts_packet_payload_from_wav_pcm_lsb() {
+        let secret = b"\x89PNG\r\n\x1A\nwav-lsb-blueprint";
+        let packet = stegascope_packet("wav_blueprint.png", secret);
+        let bytes = wav_pcm_with_lsb_payload(&packet, BitPacking::LsbFirst, 24);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.wav", bytes.len() as u64, "audio/wav"),
+            bytes,
+        };
+
+        let payloads = extract_payload_candidates(&media).unwrap();
+        let payload = payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "wav_blueprint.png")
+            .expect("expected default pipeline WAV PCM LSB packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "wav-pcm-lsb-analyzer");
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn wav_pcm_lsb_analyzer_ignores_unsupported_or_truncated_wav() {
+        let unsupported_float = wav_bytes(3, 1, 32, vec![0; 32]);
+        let mut truncated = wav_pcm_with_lsb_payload(valid_pdf_payload(), BitPacking::MsbFirst, 16);
+        truncated.truncate(truncated.len() - 3);
+
+        for bytes in [unsupported_float, truncated] {
+            let media = LoadedMedia {
+                source: MediaFileInfo::new("carrier.wav", bytes.len() as u64, "audio/wav"),
+                bytes,
+            };
+
+            let outcome = WavPcmLsbAnalyzer::default().analyze(&media).unwrap();
+
+            assert!(outcome.extracted_files.is_empty());
+            assert!(outcome.extracted_payloads.is_empty());
+        }
+    }
+
+    #[test]
     fn lsb_2bpp_analyzer_extracts_known_signature_from_two_pixel_channels() {
         let payload = valid_pdf_payload();
         let bytes = png_with_rg_2bpp_payload(payload, BitPacking::MsbFirst);
@@ -2357,6 +2614,66 @@ mod tests {
             .unwrap();
 
         bytes
+    }
+
+    fn wav_pcm_with_lsb_payload(
+        payload: &[u8],
+        bit_packing: BitPacking,
+        bits_per_sample: u16,
+    ) -> Vec<u8> {
+        let mut data = Vec::new();
+
+        for bit in payload_bits(payload, bit_packing) {
+            match bits_per_sample {
+                8 => data.push(0x80 | bit),
+                16 => data.extend_from_slice(&(bit as i16).to_le_bytes()),
+                24 => data.extend_from_slice(&[bit, 0, 0]),
+                32 => data.extend_from_slice(&(bit as i32).to_le_bytes()),
+                _ => panic!("unsupported test PCM width"),
+            }
+        }
+
+        wav_bytes(1, 1, bits_per_sample, data)
+    }
+
+    fn wav_bytes(audio_format: u16, channels: u16, bits_per_sample: u16, data: Vec<u8>) -> Vec<u8> {
+        let sample_rate = 8_000_u32;
+        let bytes_per_sample = u32::from(bits_per_sample / 8);
+        let block_align = channels * (bits_per_sample / 8);
+        let byte_rate = sample_rate * u32::from(channels) * bytes_per_sample;
+        let mut format = Vec::new();
+        format.extend_from_slice(&audio_format.to_le_bytes());
+        format.extend_from_slice(&channels.to_le_bytes());
+        format.extend_from_slice(&sample_rate.to_le_bytes());
+        format.extend_from_slice(&byte_rate.to_le_bytes());
+        format.extend_from_slice(&block_align.to_le_bytes());
+        format.extend_from_slice(&bits_per_sample.to_le_bytes());
+
+        let mut chunks = Vec::new();
+        chunks.extend_from_slice(&wav_chunk(*b"fmt ", &format));
+        chunks.extend_from_slice(&wav_chunk(*b"data", &data));
+
+        let riff_size = 4_u32 + chunks.len() as u32;
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(b"RIFF");
+        bytes.extend_from_slice(&riff_size.to_le_bytes());
+        bytes.extend_from_slice(b"WAVE");
+        bytes.extend_from_slice(&chunks);
+
+        bytes
+    }
+
+    fn wav_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&kind);
+        chunk.extend_from_slice(&(data.len() as u32).to_le_bytes());
+        chunk.extend_from_slice(data);
+
+        if data.len() % 2 == 1 {
+            chunk.push(0);
+        }
+
+        chunk
     }
 
     fn png_with_text_chunk(keyword: &[u8], payload: &[u8]) -> Vec<u8> {

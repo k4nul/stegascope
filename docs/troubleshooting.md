@@ -96,10 +96,10 @@ For JPEG segment analysis, candidates are limited to valid COM/APP segment data
 or bytes appended after the structural EOI marker. Payload-like bytes inside
 scan image data, malformed segments, or non-JPEG bytes are ignored.
 
-For audio and video carriers, the current loaders can attach the file bytes, but
-the registered LSB analyzers are image-focused. Byte-oriented embedded signature
-scanning may still report known payload signatures, while WAV PCM sample LSB
-analysis is reserved for the next analyzer phase.
+For WAV audio carriers, uncompressed PCM `fmt ` and `data` chunks are scanned
+for sample LSB payload streams. Unsupported WAV encodings, malformed WAV chunks,
+and non-WAV audio/video carriers may still be checked by byte-oriented embedded
+signature scanning, but they do not run audio-specific LSB extraction.
 
 ## Task Not Found
 

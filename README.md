@@ -31,11 +31,12 @@ Current implementation facts:
 - Analyzer coverage: PNG metadata and ancillary text chunks, including
   compressed `zTXt`/`iTXt` text payloads, PNG after-IEND container payload data,
   embedded file signatures, JPEG COM/APP segment and after-EOI payload data, RGB
-  LSB streams, two-bit-per-pixel LSB strategies, and verified StegaScope
-  packets.
-- Audio and video files can be attached through MIME-prefix loaders, but WAV PCM
-  sample LSB analysis is not implemented yet; it remains the next gated analyzer
-  phase.
+  LSB streams, two-bit-per-pixel LSB strategies, WAV PCM sample LSB streams,
+  and verified StegaScope packets.
+- Audio and video files can be attached through MIME-prefix loaders. WAV files
+  with uncompressed PCM sample data are analyzed for sample LSB payloads; other
+  non-image carriers still rely on byte-oriented signature scanning until later
+  analyzer phases are selected.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; initial command-level Rust tests cover attach
   and analyze command flow; frontend UI/API flow tests are still missing.

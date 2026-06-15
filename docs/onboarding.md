@@ -74,10 +74,10 @@ does not provide one. Unsupported extensions fall back to
 `application/octet-stream`, which the Rust loader rejects because there is no
 generic binary loader.
 
-Audio and video files are loadable carrier types, but the current analyzer set
-does not include WAV PCM sample LSB analysis. Non-image carriers can still be
-processed by byte-oriented analyzers such as embedded signature scanning; the
-audio-specific LSB package is the next gated phase.
+Audio and video files are loadable carrier types. WAV files with uncompressed
+PCM sample data are scanned for sample LSB payloads, while other non-image
+carriers can still be processed by byte-oriented analyzers such as embedded
+signature scanning.
 
 ## Analyzer Set
 
@@ -97,10 +97,12 @@ registers:
 - `lsb-analyzer`: extracts RGB least-significant-bit streams from decoded images.
 - `lsb-2bpp-analyzer`: extracts two-bit-per-pixel strategies, including
   channel-pair and matrix-order variants.
+- `wav-pcm-lsb-analyzer`: extracts least-significant-bit streams from 8-, 16-,
+  24-, and 32-bit uncompressed PCM WAV sample data.
 
 The JPEG and PNG container-side-channel coverage is the current phase evidence.
-WAV PCM sample LSB analysis is not present yet and belongs to the next gated
-analyzer phase.
+WAV PCM sample LSB source and tests now exist, but the machine-readable phase
+state remains unchanged until the transition validation gate passes.
 
 Verified StegaScope packets are preferred over signature-only candidates during
 finalization. Extracted payload metadata and payload bytes are tracked together

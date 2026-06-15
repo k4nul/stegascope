@@ -33,6 +33,8 @@ extraction behavior, including:
 - PNG after-IEND packet and signature candidate extraction.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   malformed segment safety, and scan-data isolation.
+- WAV PCM sample LSB packet and signature extraction, plus unsupported or
+  truncated WAV safety.
 - Two-bit-per-pixel channel and matrix strategies.
 - Verified packet payload byte recovery.
 - Signature-only candidate suppression when verified packets exist.
@@ -81,11 +83,13 @@ For a focused review of the current container-side-channel analyzer package:
 cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml png_container_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml compressed_png
+cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb_analyzer
 ```
 
 The `png_container_analyzer` filter covers after-IEND payload tests. The
 `compressed_png` filter covers the compressed `zTXt`/`iTXt` metadata tests that
-also support the current PNG phase gate.
+also support the current PNG phase gate. The `wav_pcm_lsb_analyzer` filter
+covers the audio analyzer package without changing phase state by itself.
 
 For release packaging changes or before creating a distributable:
 
@@ -101,7 +105,7 @@ Add these before treating the app as a stable MVP:
   `download_extracted_file`, plus negative-path attach and analyze cases.
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
-- Test fixtures for supported media classes and known payload examples.
+- Broader test fixtures for supported media classes and known payload examples.
 - A documented implementation policy for large media files, because the current
   frontend sends file bytes over Tauri IPC as a `number[]`. The current
   architecture boundary is summarized in [Architecture Notes](architecture.md),

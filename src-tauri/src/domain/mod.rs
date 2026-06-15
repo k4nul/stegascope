@@ -8,7 +8,7 @@ pub mod task;
 pub use analyzer::{
     AnalysisError, AnalysisOutcome, BaseFileAnalyzer, EmbeddedSignatureAnalyzer, ExtractedPayload,
     FileAnalyzer, JpegSegmentAnalyzer, LoadedMedia, Lsb2bppAnalyzer, LsbAnalyzer, MetadataAnalyzer,
-    PayloadSource, PngContainerAnalyzer,
+    PayloadSource, PngContainerAnalyzer, WavPcmLsbAnalyzer,
 };
 pub use analyzer_pipeline::{
     default_analyzers, extract_payload_candidates, finalize_extracted_payloads,

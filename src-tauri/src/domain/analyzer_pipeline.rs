@@ -1,7 +1,7 @@
 use super::analyzer::{
     AnalysisError, AnalysisOutcome, EmbeddedSignatureAnalyzer, ExtractedPayload, FileAnalyzer,
     JpegSegmentAnalyzer, LoadedMedia, Lsb2bppAnalyzer, LsbAnalyzer, MetadataAnalyzer,
-    PayloadSource, PngContainerAnalyzer,
+    PayloadSource, PngContainerAnalyzer, WavPcmLsbAnalyzer,
 };
 
 pub fn default_analyzers() -> Vec<Box<dyn FileAnalyzer>> {
@@ -12,6 +12,7 @@ pub fn default_analyzers() -> Vec<Box<dyn FileAnalyzer>> {
         Box::<EmbeddedSignatureAnalyzer>::default(),
         Box::<LsbAnalyzer>::default(),
         Box::<Lsb2bppAnalyzer>::default(),
+        Box::<WavPcmLsbAnalyzer>::default(),
     ]
 }
 

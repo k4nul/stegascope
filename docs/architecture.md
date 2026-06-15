@@ -68,6 +68,7 @@ The Rust domain layer is organized under `src-tauri/src/domain/`:
 - `embedded-signature-analyzer`
 - `lsb-analyzer`
 - `lsb-2bpp-analyzer`
+- `wav-pcm-lsb-analyzer`
 
 The command flow in `analyze_task` runs those analyzers, collects payload
 candidates, finalizes them through `finalize_extracted_payloads`, and stores the
@@ -75,10 +76,11 @@ result on the task. Verified StegaScope packets take priority over
 signature-only candidates during finalization so a stronger payload match does
 not compete with weaker duplicate evidence.
 
-Audio and video files can be attached through their loaders, but the registered
-LSB analyzers are still image-focused. WAV PCM sample LSB analysis belongs to
-the next `audio-lsb-analysis` phase and should be added as a focused analyzer
-package with Rust tests.
+Audio and video files can be attached through their loaders. The audio-specific
+LSB analyzer is intentionally narrow: it parses RIFF/WAVE files with
+uncompressed PCM `fmt ` and `data` chunks, then extracts sample LSB streams from
+8-, 16-, 24-, and 32-bit PCM data. Other audio and video formats still rely on
+byte-oriented signature scanning until their own analyzer phases are selected.
 
 ## Payload Download Path
 
