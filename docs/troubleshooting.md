@@ -40,6 +40,18 @@ itself is changing.
 If `npm ci` cannot resolve `registry.npmjs.org`, fix network or DNS access and
 rerun setup before treating the frontend build as a project failure.
 
+In sandboxed automation runs, npm may also need a writable cache outside the
+home directory. Use a temporary cache for setup validation when the default
+`~/.npm` path is not writable:
+
+```bash
+npm_config_cache=/tmp/stegascope-npm-cache npm ci
+```
+
+If that command still reports `EAI_AGAIN` while fetching packages, the blocker is
+network or DNS access to `registry.npmjs.org`, not a repository dependency
+manifest issue.
+
 ## File Selection Fails With Unsupported Media Type
 
 The UI accepts image, audio, and video files. The Rust loader supports media

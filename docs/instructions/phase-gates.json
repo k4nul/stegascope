@@ -4,7 +4,7 @@
   "current_phase": "container-side-channels",
   "next_phase": "audio-lsb-analysis",
   "transition": {
-    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented, tested, and the frontend/Rust boundary remains safe for local files.",
+    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented, tested, and the current frontend/Rust local-file boundary remains explicit.",
     "mode": "machine-gated-analyzer-expansion",
     "validation_command": "npm run build",
     "transition_validation_command": "npm run build",

@@ -50,11 +50,15 @@ Current implementation facts:
   workflow failures.
 - [Maintenance](docs/maintenance.md): automation posture, safe edit boundaries,
   and documentation upkeep notes.
-- [Analyzer Phase Readiness](docs/phase-readiness.md): checked-in phase evidence
-  and the boundary before audio LSB analysis.
-- `docs/stegascope_class_diagram_after_factory.svg` and `.png`: existing class
-  diagram exports. Treat them as historical references until regenerated from
-  current code.
+- [Architecture Notes](docs/architecture.md): maintained frontend/Rust boundary,
+  command surface, domain module, analyzer pipeline, and diagram status.
+- [Analyzer Phase Readiness](docs/phase-readiness.md): checked-in phase
+  evidence, gate verification runbook, and the boundary before audio LSB
+  analysis.
+- `Stegascope.drawio` and `docs/stegascope_class_diagram_after_factory.svg` /
+  `.png`: stale historical diagram source and exports. Treat
+  [Architecture Notes](docs/architecture.md) as the maintained architecture
+  reference until the diagrams are regenerated from current code or removed.
 
 ## Quick Start
 
@@ -107,12 +111,13 @@ See [Testing](docs/testing.md) for when each command is appropriate.
 ## Suggested Next Steps
 
 1. Select and document the MVP product direction before enabling automation.
-2. Clear the frontend build dependency/tooling blocker before attempting a phase
-   transition out of `container-side-channels`.
+2. Produce a fresh `npm run build` transition result before attempting a phase
+   transition out of `container-side-channels`; install dependencies and resolve
+   local npm, DNS, or cache blockers first if needed.
 3. Move large media ingestion closer to Rust so desktop file paths can be read
    without sending full `number[]` payloads over Tauri IPC.
 4. Split frontend analysis surfaces into feature modules once the workflow is
    accepted.
 5. Add command-level Rust tests and critical UI/API flow coverage.
-6. Regenerate the class diagram exports from current code or replace them with a
-   source-controlled architecture note.
+6. Regenerate the draw.io class diagram and exported images from current code,
+   or remove the stale diagram artifacts.

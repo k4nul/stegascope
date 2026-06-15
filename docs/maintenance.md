@@ -42,10 +42,12 @@ Update documentation when behavior changes in these areas:
 - Validation commands, test coverage, or release packaging behavior.
 - Automation activation state or local maintainer instructions.
 
-The existing class diagram exports under `docs/` may lag behind the current Rust
-domain model. Before using them as architecture references, compare them with
-`src-tauri/src/domain/` and regenerate the exports from the diagram source or
-replace them with a maintained architecture document.
+The maintained architecture reference is
+[Architecture Notes](architecture.md). The existing draw.io class diagram and
+exports under `docs/` may lag behind the current Rust domain model. Before
+using them as architecture references, compare them with `src-tauri/src/domain/`
+and regenerate the source plus exports or remove them in a future documentation
+cleanup.
 
 For phase evidence and the transition boundary between
 `container-side-channels` and `audio-lsb-analysis`, keep
@@ -70,8 +72,13 @@ Document any skipped validation with the exact blocker.
 - Automation remains disabled by design.
 - Phase transition out of `container-side-channels` still requires a fresh
   `npm run build` result plus the required analyzer evidence gates.
+- The next analyzer and ingestion phases still require implementation evidence:
+  WAV PCM LSB analysis needs source and Rust test coverage, and large media
+  ingestion needs an IPC boundary change. Do not close those gates with
+  documentation-only updates.
 - Command-level Rust coverage is partial; attach and analyze command flow has
   initial tests, while create/list/download command paths still need coverage.
 - Frontend UI/API flow tests are missing.
 - Large media handling still sends full file byte arrays over Tauri IPC.
-- Class diagram exports need regeneration or replacement.
+- The draw.io class diagram and exports need regeneration or removal now that a
+  maintained text architecture note exists.

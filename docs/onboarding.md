@@ -24,6 +24,10 @@ The frontend and Rust backend communicate through Tauri IPC. Keep user interface
 state and presentation logic in `src/`, and keep file loading, analyzer behavior,
 payload bytes, and filesystem writes in `src-tauri/`.
 
+For a maintained architecture summary, including the command surface, domain
+module map, analyzer pipeline, and stale diagram status, see
+[Architecture Notes](architecture.md).
+
 ## Current User Flow
 
 1. Create a task with case number, case name, investigator name, and date.
@@ -93,6 +97,10 @@ registers:
 - `lsb-analyzer`: extracts RGB least-significant-bit streams from decoded images.
 - `lsb-2bpp-analyzer`: extracts two-bit-per-pixel strategies, including
   channel-pair and matrix-order variants.
+
+The JPEG and PNG container-side-channel coverage is the current phase evidence.
+WAV PCM sample LSB analysis is not present yet and belongs to the next gated
+analyzer phase.
 
 Verified StegaScope packets are preferred over signature-only candidates during
 finalization. Extracted payload metadata and payload bytes are tracked together

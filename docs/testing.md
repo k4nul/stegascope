@@ -59,6 +59,8 @@ changing `current_phase` in `docs/instructions/phase-gates.json`, rerun the
 manifest's transition validation command and the Rust analyzer checks that prove
 the selected analyzer package. See
 [Analyzer Phase Readiness](phase-readiness.md) for the current evidence map.
+That document also contains a gate-by-gate runbook for checking the JPEG, PNG,
+Rust test, and frontend build evidence before a phase-transition patch.
 
 For frontend UI or IPC wrapper changes:
 
@@ -72,6 +74,18 @@ For Rust command, loader, task, or analyzer changes:
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
 ```
+
+For a focused review of the current container-side-channel analyzer package:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer
+cargo test --manifest-path src-tauri/Cargo.toml png_container_analyzer
+cargo test --manifest-path src-tauri/Cargo.toml compressed_png
+```
+
+The `png_container_analyzer` filter covers after-IEND payload tests. The
+`compressed_png` filter covers the compressed `zTXt`/`iTXt` metadata tests that
+also support the current PNG phase gate.
 
 For release packaging changes or before creating a distributable:
 
@@ -88,5 +102,7 @@ Add these before treating the app as a stable MVP:
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Test fixtures for supported media classes and known payload examples.
-- A documented policy for large media files, because the current frontend sends
-  file bytes over Tauri IPC as a `number[]`.
+- A documented implementation policy for large media files, because the current
+  frontend sends file bytes over Tauri IPC as a `number[]`. The current
+  architecture boundary is summarized in [Architecture Notes](architecture.md),
+  but the implementation still needs a later Rust-side ingestion phase.
