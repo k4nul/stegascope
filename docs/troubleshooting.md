@@ -66,17 +66,20 @@ types beginning with:
 - `audio/`
 - `video/`
 
-When the browser does not provide a MIME type, the frontend infers one from the
-file extension. Unknown extensions become `application/octet-stream`, which is
-rejected by the loader as an unsupported media type.
+When no MIME type is provided, Rust infers one from the file extension. Unknown
+extensions become `application/octet-stream`, which is rejected by the loader as
+an unsupported media type.
+Known extensions use canonical MIME labels such as `image/jpeg`, `audio/wav`,
+`video/x-msvideo`, and `video/mp4` so task metadata stays consistent.
 
 Use a file with a known image, audio, or video extension, or add explicit loader
 support before accepting generic binary files.
 
 ## Attach Media Reports An Empty File
 
-`attach_media_file` rejects empty byte payloads. Confirm the selected file is not
-zero bytes and that the desktop file picker returned the intended file.
+`attach_media_file_from_path` rejects empty files after Rust reads the selected
+path. Confirm the selected file is not zero bytes and that the desktop file
+picker returned the intended file.
 
 ## Start Analysis Is Disabled
 

@@ -76,14 +76,17 @@ Document any skipped validation with the exact blocker.
   needed, rerun `npm run build`, and record the result before changing phase
   state. A `tsc: not found` result is a setup blocker, not a repository source
   failure.
-- The next ingestion phase still requires implementation evidence: large media
-  ingestion needs an IPC boundary change. The WAV PCM LSB analyzer has source
-  and Rust test coverage, but phase state must still wait for a passing
-  transition validation run. Do not close either gate with documentation-only
+- The Rust-side ingestion boundary now has implementation evidence through the
+  path-based attach command. Phase state must still wait for a passing
+  transition validation run. Do not change phase state with documentation-only
   updates.
-- Command-level Rust coverage is partial; attach and analyze command flow has
-  initial tests, while create/list/download command paths still need coverage.
+- Command-level Rust coverage is partial; create, attach, analyze,
+  list-extracted-files, and download flow have initial tests, while
+  negative-path attach/analyze and cross-command state transitions still need
+  coverage.
 - Frontend UI/API flow tests are missing.
-- Large media handling still sends full file byte arrays over Tauri IPC.
+- Large media handling now uses a path-based frontend attach flow. A later
+  cleanup can remove the legacy byte-input attach command after compatibility
+  callers are no longer needed.
 - The draw.io class diagram and exports need regeneration or removal now that a
   maintained text architecture note exists.

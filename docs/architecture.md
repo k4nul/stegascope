@@ -11,17 +11,19 @@ The frontend owns presentation state and user workflow. The Rust backend owns
 task storage, media loading, analyzer execution, payload finalization, and
 filesystem writes.
 
-The current IPC boundary sends uploaded media bytes from the frontend to Rust as
-`number[]`. That keeps the first app flow simple, but it is not the final large
-media boundary. A later `rust-side-ingestion` phase should move file reading
-closer to Rust so large local files are not copied through frontend IPC.
+The current frontend attach flow uses the Tauri dialog plugin to select a local
+media path, then sends that path to Rust through `attach_media_file_from_path`.
+Rust reads the file bytes, infers canonical media metadata, and owns the loader
+handoff. The older byte-input command remains registered for compatibility and
+command-level coverage, but the current frontend wrapper no longer sends large
+`number[]` media payloads over IPC.
 
 ## Frontend Responsibilities
 
 `src/App.tsx` owns the visible case workspace:
 
 - task form and active task tabs,
-- media file selection and extension-based media type fallback,
+- media file path selection through the desktop dialog,
 - analyze action state,
 - result and extracted-payload rendering,
 - download action wiring.
@@ -36,6 +38,7 @@ then calls the Rust commands through `invoke`.
 process-local `AppState`. The active commands are:
 
 - `create_task`
+- `attach_media_file_from_path`
 - `attach_media_file`
 - `analyze_task`
 - `get_extracted_files`

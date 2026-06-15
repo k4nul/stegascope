@@ -105,14 +105,15 @@ PCM sample LSB source/test package now exists as pre-transition audio evidence.
 The next immediate handoff is validation, not another analyzer rewrite: install
 the local frontend dependencies, rerun the transition command, and only then
 prepare a phase-transition patch if every required gate still matches source.
-The later ingestion phase remains separate: change the current frontend IPC
-boundary so large media files are not sent as `number[]` payloads through
-`src/api/analysis.ts`.
+The ingestion boundary now has implementation evidence: the current frontend
+attach wrapper sends a selected local media path, and Rust reads file bytes
+inside `attach_media_file_from_path`. The legacy byte-input command remains
+registered for compatibility and command-level coverage, so later cleanup can
+remove that surface once no caller needs it.
 
-Do not use this documentation note to advance phase state or close the ingestion
-gate. Phase state still needs a passing transition validation run, and the IPC
-boundary gate needs an implementation change across `src/api/analysis.ts` and
-the Tauri command surface.
+Do not use this documentation note to advance phase state. Phase state still
+needs a passing transition validation run, even when implementation evidence for
+individual source gates is present.
 
 ## Documentation Handoff Note
 
@@ -122,8 +123,7 @@ the exact validation commands for each gate, and records the remaining boundary
 before `audio-lsb-analysis`.
 
 The handoff does not replace source or test evidence. Updating this note without
-a passing transition validation run does not advance `current_phase` or change
-the large-media IPC boundary.
+a passing transition validation run does not advance `current_phase`.
 
 ## Known Local Validation Blockers
 

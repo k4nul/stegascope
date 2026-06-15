@@ -44,9 +44,12 @@ Current implementation facts:
   with uncompressed PCM sample data are analyzed for sample LSB payloads; other
   non-image carriers still rely on byte-oriented signature scanning until later
   analyzer phases are selected.
+- The frontend attach flow selects a local media path, and Rust reads the file
+  inside the Tauri command layer before loader routing.
 - Task state is in memory for the running desktop session.
-- Rust analyzer unit tests exist; initial command-level Rust tests cover attach
-  and analyze command flow; frontend UI/API flow tests are still missing.
+- Rust analyzer unit tests exist; command-level Rust tests cover create, attach,
+  analyze, list-extracted-files, and download flow; frontend UI/API flow tests
+  are still missing.
 
 ## Documentation Map
 
@@ -131,10 +134,8 @@ transition gate.
 2. Produce a fresh `npm run build` transition result before attempting a phase
    transition out of `container-side-channels`; install dependencies and resolve
    local npm, DNS, or cache blockers first if needed.
-3. Move large media ingestion closer to Rust so desktop file paths can be read
-   without sending full `number[]` payloads over Tauri IPC.
-4. Split frontend analysis surfaces into feature modules once the workflow is
+3. Split frontend analysis surfaces into feature modules once the workflow is
    accepted.
-5. Add command-level Rust tests and critical UI/API flow coverage.
-6. Regenerate the draw.io class diagram and exported images from current code,
+4. Add negative-path command-level Rust tests and critical UI/API flow coverage.
+5. Regenerate the draw.io class diagram and exported images from current code,
    or remove the stale diagram artifacts.

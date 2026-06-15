@@ -56,6 +56,13 @@ struct UploadedMediaInput {
     bytes: Vec<u8>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct UploadedMediaPathInput {
+    file_path: String,
+    file_type: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct TaskResponse {
@@ -164,8 +171,73 @@ fn attach_media_file_with_state(
         input.file_size_bytes
     };
     let file_type = normalize_media_type(&input.file_name, &input.file_type);
-    let media_info = MediaFileInfo::new(input.file_name.trim(), file_size_bytes, file_type);
-    let loader = create_loader(media_info, input.bytes).map_err(|error| error.to_string())?;
+
+    attach_media_bytes_with_state(
+        &task_id,
+        &input.file_name,
+        file_size_bytes,
+        file_type,
+        input.bytes,
+        state,
+    )
+}
+
+#[tauri::command]
+fn attach_media_file_from_path(
+    task_id: String,
+    input: UploadedMediaPathInput,
+    state: State<'_, AppState>,
+) -> Result<TaskResponse, String> {
+    attach_media_file_from_path_with_state(task_id, input, state.inner())
+}
+
+fn attach_media_file_from_path_with_state(
+    task_id: String,
+    input: UploadedMediaPathInput,
+    state: &AppState,
+) -> Result<TaskResponse, String> {
+    validate_required(&task_id, "task id")?;
+    validate_required(&input.file_path, "file path")?;
+
+    let path = PathBuf::from(input.file_path.trim());
+    let metadata =
+        fs::metadata(&path).map_err(|error| format!("failed to inspect media file: {error}"))?;
+    if !metadata.is_file() {
+        return Err("media path is not a file".to_string());
+    }
+
+    let file_name = path
+        .file_name()
+        .and_then(|name| name.to_str())
+        .ok_or_else(|| "media file name is invalid".to_string())?
+        .to_string();
+    let bytes = fs::read(&path).map_err(|error| format!("failed to read media file: {error}"))?;
+    let file_type = normalize_media_type(&file_name, input.file_type.as_deref().unwrap_or(""));
+
+    attach_media_bytes_with_state(
+        &task_id,
+        &file_name,
+        metadata.len(),
+        file_type,
+        bytes,
+        state,
+    )
+}
+
+fn attach_media_bytes_with_state(
+    task_id: &str,
+    file_name: &str,
+    file_size_bytes: u64,
+    file_type: String,
+    bytes: Vec<u8>,
+    state: &AppState,
+) -> Result<TaskResponse, String> {
+    if bytes.is_empty() {
+        return Err("media file is empty".to_string());
+    }
+
+    let media_info = MediaFileInfo::new(file_name.trim(), file_size_bytes, file_type);
+    let loader = create_loader(media_info, bytes).map_err(|error| error.to_string())?;
 
     let mut tasks = lock_tasks(&state)?;
     let task = tasks
@@ -308,6 +380,7 @@ pub fn run() {
             bootstrap_status,
             create_task,
             attach_media_file,
+            attach_media_file_from_path,
             analyze_task,
             get_extracted_files,
             download_extracted_file
@@ -377,15 +450,34 @@ fn normalize_media_type(file_name: &str, file_type: &str) -> String {
         .unwrap_or_default()
         .to_ascii_lowercase();
 
-    match extension.as_str() {
-        "apng" | "avif" | "bmp" | "gif" | "jpg" | "jpeg" | "png" | "webp" => {
-            format!("image/{extension}")
-        }
-        "flac" | "m4a" | "mp3" | "ogg" | "wav" | "weba" => format!("audio/{extension}"),
-        "avi" | "m4v" | "mkv" | "mov" | "mp4" | "mpeg" | "webm" => {
-            format!("video/{extension}")
-        }
-        _ => "application/octet-stream".to_string(),
+    extension_media_type(&extension)
+        .unwrap_or("application/octet-stream")
+        .to_string()
+}
+
+fn extension_media_type(extension: &str) -> Option<&'static str> {
+    match extension {
+        "apng" => Some("image/apng"),
+        "avif" => Some("image/avif"),
+        "avi" => Some("video/x-msvideo"),
+        "bmp" => Some("image/bmp"),
+        "flac" => Some("audio/flac"),
+        "gif" => Some("image/gif"),
+        "jpeg" | "jpg" => Some("image/jpeg"),
+        "m4a" => Some("audio/mp4"),
+        "m4v" => Some("video/mp4"),
+        "mkv" => Some("video/x-matroska"),
+        "mov" => Some("video/quicktime"),
+        "mp3" => Some("audio/mpeg"),
+        "mp4" => Some("video/mp4"),
+        "mpeg" => Some("video/mpeg"),
+        "ogg" => Some("audio/ogg"),
+        "png" => Some("image/png"),
+        "wav" => Some("audio/wav"),
+        "weba" => Some("audio/webm"),
+        "webm" => Some("video/webm"),
+        "webp" => Some("image/webp"),
+        _ => None,
     }
 }
 
@@ -439,6 +531,7 @@ fn completed_at_label() -> String {
 mod tests {
     use super::*;
 
+    use crate::domain::{ExtractedPayload, FileSignature, PayloadSource, ValidationStatus};
     use image::ImageEncoder;
     use std::path::Path;
 
@@ -509,6 +602,72 @@ mod tests {
     }
 
     #[test]
+    fn normalize_media_type_uses_canonical_extension_fallbacks() {
+        let cases = [
+            ("evidence.JPG", "image/jpeg"),
+            ("carrier.m4a", "audio/mp4"),
+            ("recording.wav", "audio/wav"),
+            ("capture.avi", "video/x-msvideo"),
+            ("clip.mov", "video/quicktime"),
+            ("sample.webm", "video/webm"),
+        ];
+
+        for (file_name, expected_type) in cases {
+            assert_eq!(normalize_media_type(file_name, ""), expected_type);
+        }
+    }
+
+    #[test]
+    fn normalize_media_type_preserves_browser_provided_type() {
+        assert_eq!(
+            normalize_media_type("carrier.jpg", " image/custom-jpeg "),
+            "image/custom-jpeg"
+        );
+    }
+
+    #[test]
+    fn create_task_command_test_trims_required_fields_and_assigns_ids() {
+        let state = AppState::default();
+
+        let first = create_task_with_state(
+            CreateTaskInput {
+                case_number: " CASE-001 ".to_string(),
+                case_name: " Synthetic case ".to_string(),
+                investigator_name: " Automation ".to_string(),
+                date: " 2026-06-15 ".to_string(),
+            },
+            &state,
+        )
+        .expect("first task should be created");
+        let second =
+            create_task_with_state(sample_task_input(), &state).expect("second task should exist");
+
+        assert_eq!(first.task_id, "task-1");
+        assert_eq!(first.case_number, "CASE-001");
+        assert_eq!(first.case_name, "Synthetic case");
+        assert_eq!(first.investigator_name, "Automation");
+        assert_eq!(first.date, "2026-06-15");
+        assert_eq!(second.task_id, "task-2");
+    }
+
+    #[test]
+    fn create_task_command_test_rejects_blank_required_fields() {
+        let state = AppState::default();
+        let error = create_task_with_state(
+            CreateTaskInput {
+                case_number: "CASE-001".to_string(),
+                case_name: "   ".to_string(),
+                investigator_name: "Automation".to_string(),
+                date: "2026-06-15".to_string(),
+            },
+            &state,
+        )
+        .expect_err("blank case name should be rejected");
+
+        assert_eq!(error, "case name is required");
+    }
+
+    #[test]
     fn attach_media_file_command_test_attaches_media_and_normalizes_type() {
         let state = AppState::default();
         let task =
@@ -532,6 +691,35 @@ mod tests {
 
         assert_eq!(media_file.file_name, "carrier.png");
         assert_eq!(media_file.file_size_bytes, png_bytes.len() as u64);
+        assert_eq!(media_file.file_type, "image/png");
+        assert!(response.extracted_files.is_empty());
+    }
+
+    #[test]
+    fn attach_media_file_from_path_command_test_reads_local_media_path() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let temp_dir = TempDir::new("path-media-attach");
+        let media_path = temp_dir.path().join("carrier.png");
+        let media_bytes = png_image_bytes();
+        fs::write(&media_path, &media_bytes).expect("media fixture should be written");
+
+        let response = attach_media_file_from_path_with_state(
+            task.task_id,
+            UploadedMediaPathInput {
+                file_path: media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect("media file path should attach");
+        let media_file = response
+            .media_file
+            .expect("attached path media should be returned");
+
+        assert_eq!(media_file.file_name, "carrier.png");
+        assert_eq!(media_file.file_size_bytes, media_bytes.len() as u64);
         assert_eq!(media_file.file_type, "image/png");
         assert!(response.extracted_files.is_empty());
     }
@@ -568,6 +756,101 @@ mod tests {
         assert!(stored_files.is_empty());
     }
 
+    #[test]
+    fn get_extracted_files_command_test_returns_current_result_metadata() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let extracted_file = sample_extracted_file("stored-note.pdf", "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![ExtractedPayload {
+                file: extracted_file.clone(),
+                bytes: b"stored payload".to_vec(),
+                source: PayloadSource::SignatureScan,
+            }]);
+        }
+
+        let stored_files = get_extracted_files_with_state(task.task_id, &state)
+            .expect("stored extracted files should be readable");
+
+        assert_eq!(stored_files, vec![extracted_file]);
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_writes_current_payload_bytes() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let payload_bytes = b"downloaded payload bytes".to_vec();
+        let extracted_file = sample_extracted_file("downloaded-note.pdf", "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![ExtractedPayload {
+                file: extracted_file,
+                bytes: payload_bytes.clone(),
+                source: PayloadSource::SignatureScan,
+            }]);
+        }
+
+        let temp_dir = TempDir::new("downloads-current-payload");
+        let target_path = temp_dir.path().join("exports").join("downloaded-note.pdf");
+        let response = download_extracted_file_with_state(
+            task.task_id,
+            "downloaded-note.pdf".to_string(),
+            "unit-test-analyzer".to_string(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("payload should download");
+
+        assert_eq!(response.file_name, "downloaded-note.pdf");
+        assert_eq!(response.file_type, "application/pdf");
+        assert_eq!(response.saved_path, target_path.display().to_string());
+        assert_eq!(
+            fs::read(&target_path).expect("downloaded payload should be readable"),
+            payload_bytes
+        );
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_rejects_missing_payload_bytes() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let temp_dir = TempDir::new("rejects-missing-payload");
+        let target_path = temp_dir.path().join("missing.bin");
+
+        let error = download_extracted_file_with_state(
+            task.task_id,
+            "missing.bin".to_string(),
+            "unit-test-analyzer".to_string(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("missing payload should be rejected");
+
+        assert_eq!(
+            error,
+            "extracted file bytes not found in current analysis result: missing.bin from unit-test-analyzer"
+        );
+        assert!(!target_path.exists());
+    }
+
     fn sample_task_input() -> CreateTaskInput {
         CreateTaskInput {
             case_number: "CASE-001".to_string(),
@@ -584,6 +867,19 @@ mod tests {
             .write_image(&pixels, 1, 1, image::ExtendedColorType::Rgba8)
             .expect("test PNG should encode");
         bytes
+    }
+
+    fn sample_extracted_file(file_name: &str, analyzer_name: &str) -> ExtractedFile {
+        ExtractedFile::new(
+            file_name,
+            analyzer_name,
+            SuspiciousLevel::High,
+            ValidationStatus::Validated,
+            "Synthetic command-level payload.",
+            24,
+            "application/pdf",
+            FileSignature::known("PDF document", "pdf", "application/pdf", "25504446"),
+        )
     }
 
     struct TempDir {

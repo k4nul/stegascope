@@ -40,9 +40,10 @@ extraction behavior, including:
 - Signature-only candidate suppression when verified packets exist.
 - Invalid MP3 candidate rejection.
 
-There are initial command-level Rust tests for attach and analyze command flow.
-There are no frontend tests, command-level Rust tests for every Tauri command,
-or end-to-end desktop workflow tests yet.
+There are initial command-level Rust tests for create, byte-input attach,
+path-based attach, analyze, list-extracted-files, and download command flow.
+There are no frontend tests, negative-path command-level Rust tests for every
+Tauri command, or end-to-end desktop workflow tests yet.
 
 Analyzer fixtures are synthetic inline byte vectors or generated images. Do not
 commit real evidence files, recovered private payloads, or generated fixture
@@ -114,12 +115,12 @@ npm run tauri -- build
 
 Add these before treating the app as a stable MVP:
 
-- Complete command-level tests for `create_task`, `get_extracted_files`, and
-  `download_extracted_file`, plus negative-path attach and analyze cases.
+- Broaden command-level tests for negative-path attach and analyze cases,
+  malformed download requests, and cross-command state transitions.
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Broader test fixtures for supported media classes and known payload examples.
-- A documented implementation policy for large media files, because the current
-  frontend sends file bytes over Tauri IPC as a `number[]`. The current
-  architecture boundary is summarized in [Architecture Notes](architecture.md),
-  but the implementation still needs a later Rust-side ingestion phase.
+- Additional hardening for large media files, including removing the legacy
+  byte-input attach command once no compatibility caller needs it. The current
+  path-based attach boundary is summarized in
+  [Architecture Notes](architecture.md).

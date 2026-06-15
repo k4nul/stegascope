@@ -60,29 +60,18 @@ export type DownloadExtractedFileResponse = {
   savedPath: string;
 };
 
-type UploadedMediaInput = {
-  fileName: string;
-  fileSizeBytes: number;
-  fileType: string;
-  bytes: number[];
-};
-
 export const createTask = async (input: CreateTaskInput): Promise<TaskResponse> => {
   return invoke<TaskResponse>("create_task", { input });
 };
 
 export const attachMediaFile = async (
   taskId: string,
-  file: File,
+  filePath: string,
 ): Promise<TaskResponse> => {
-  const input: UploadedMediaInput = {
-    fileName: file.name,
-    fileSizeBytes: file.size,
-    fileType: file.type || inferMediaType(file.name),
-    bytes: Array.from(new Uint8Array(await file.arrayBuffer())),
-  };
-
-  return invoke<TaskResponse>("attach_media_file", { taskId, input });
+  return invoke<TaskResponse>("attach_media_file_from_path", {
+    taskId,
+    input: { filePath },
+  });
 };
 
 export const analyzeTask = async (taskId: string): Promise<AnalysisResultResponse> => {
@@ -105,37 +94,4 @@ export const downloadExtractedFile = async (
     analyzerName,
     targetPath,
   });
-};
-
-const inferMediaType = (fileName: string): string => {
-  const extension = fileName.split(".").pop()?.toLowerCase();
-
-  switch (extension) {
-    case "apng":
-    case "avif":
-    case "bmp":
-    case "gif":
-    case "jpg":
-    case "jpeg":
-    case "png":
-    case "webp":
-      return `image/${extension}`;
-    case "flac":
-    case "m4a":
-    case "mp3":
-    case "ogg":
-    case "wav":
-    case "weba":
-      return `audio/${extension}`;
-    case "avi":
-    case "m4v":
-    case "mkv":
-    case "mov":
-    case "mp4":
-    case "mpeg":
-    case "webm":
-      return `video/${extension}`;
-    default:
-      return "application/octet-stream";
-  }
 };

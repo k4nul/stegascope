@@ -1,5 +1,5 @@
 import { useMemo, useRef, useState } from "react";
-import { save } from "@tauri-apps/plugin-dialog";
+import { open, save } from "@tauri-apps/plugin-dialog";
 import {
   analyzeTask,
   attachMediaFile,
@@ -126,7 +126,6 @@ function App() {
   const [tabs, setTabs] = useState<AnalysisTab[]>([createTab(1)]);
   const [activeTabId, setActiveTabId] = useState<number>(1);
   const nextTabIdRef = useRef(2);
-  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const activeTab = useMemo(
     () => tabs.find((tab) => tab.id === activeTabId) ?? tabs[0],
@@ -196,22 +195,58 @@ function App() {
     }
   };
 
-  const handleFileSelected = async (file: File): Promise<void> => {
+  const handleSelectMediaFile = async (): Promise<void> => {
     if (!activeTab?.taskId || activeTab.phase === "uploading") {
       return;
     }
 
-    patchTab(activeTab.id, {
-      phase: "uploading",
-      error: null,
-      downloadPath: null,
-      mediaFile: null,
-      result: null,
-      extractedFiles: [],
-    });
-
     try {
-      const task = await attachMediaFile(activeTab.taskId, file);
+      const selectedPath = await open({
+        multiple: false,
+        filters: [
+          {
+            name: "Media files",
+            extensions: [
+              "apng",
+              "avif",
+              "avi",
+              "bmp",
+              "flac",
+              "gif",
+              "jpeg",
+              "jpg",
+              "m4a",
+              "m4v",
+              "mkv",
+              "mov",
+              "mp3",
+              "mp4",
+              "mpeg",
+              "ogg",
+              "png",
+              "wav",
+              "weba",
+              "webm",
+              "webp",
+            ],
+          },
+        ],
+      });
+
+      if (!selectedPath || Array.isArray(selectedPath)) {
+        return;
+      }
+
+      patchTab(activeTab.id, {
+        phase: "uploading",
+        error: null,
+        downloadPath: null,
+        mediaFile: null,
+        result: null,
+        extractedFiles: [],
+      });
+
+      const task = await attachMediaFile(activeTab.taskId, selectedPath);
 
       patchTab(activeTab.id, {
         mediaFile: task.mediaFile,
@@ -462,43 +497,22 @@ function App() {
                     className={`dropzone ${
                       activeTab.phase === "uploading" ? "busy" : ""
                     }`}
-                    onDragOver={(event) => event.preventDefault()}
-                    onDrop={(event) => {
-                      event.preventDefault();
-                      const file = event.dataTransfer.files?.[0];
-                      if (file) {
-                        void handleFileSelected(file);
-                      }
-                    }}
-                    onClick={() => fileInputRef.current?.click()}
+                    onClick={() => void handleSelectMediaFile()}
                     role="button"
                     tabIndex={0}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
-                        fileInputRef.current?.click();
+                        void handleSelectMediaFile();
                       }
                     }}
                   >
-                    <input
-                      ref={fileInputRef}
-                      type="file"
-                      accept="image/*,audio/*,video/*"
-                      hidden
-                      onChange={(event) => {
-                        const file = event.target.files?.[0];
-                        event.target.value = "";
-                        if (file) {
-                          void handleFileSelected(file);
-                        }
-                      }}
-                    />
                     <p className="drop-title">
                       {activeTab.phase === "uploading"
                         ? "Loading media file..."
-                        : "Drop image, audio, or video file here"}
+                        : "Select image, audio, or video file"}
                     </p>
-                    <p className="muted">or click to select a file from your device</p>
+                    <p className="muted">No file data leaves this desktop session.</p>
                     {activeTab.mediaFile && (
                       <div className="selected-file">
                         <strong>{activeTab.mediaFile.fileName}</strong>

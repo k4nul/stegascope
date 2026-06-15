@@ -45,8 +45,11 @@ memory by the Tauri state object, so it is not persisted across app restarts.
 Registered Rust commands include:
 
 - `create_task`: validates required case fields and creates an in-memory task.
-- `attach_media_file`: validates task ID, file name, and non-empty bytes; creates
-  an image, audio, or video loader from the uploaded media metadata.
+- `attach_media_file_from_path`: validates a selected local media path, reads
+  the file in Rust, and creates an image, audio, or video loader from canonical
+  media metadata.
+- `attach_media_file`: legacy byte-input command used by command-level tests and
+  compatibility callers.
 - `analyze_task`: runs the default analyzer set and replaces the task's extracted
   files with the latest payload candidates.
 - `get_extracted_files`: returns the extracted file metadata for a task.
@@ -54,9 +57,8 @@ Registered Rust commands include:
   target path.
 - `bootstrap_status`: reports app/package status.
 
-The frontend wrappers in `src/api/analysis.ts` currently cover all listed
-commands except `bootstrap_status`, which is registered in Rust but not called by
-the current UI.
+The frontend wrappers in `src/api/analysis.ts` currently cover the user-facing
+commands except `bootstrap_status` and the legacy byte-input attach command.
 
 When adding a new command, update both `src/api/analysis.ts` and the
 `tauri::generate_handler!` list in `src-tauri/src/lib.rs`.
@@ -69,10 +71,9 @@ Media type routing is based on MIME-like prefixes:
 - `audio/*` uses the audio loader.
 - `video/*` uses the video loader.
 
-The frontend infers a media type from common file extensions when the browser
-does not provide one. Unsupported extensions fall back to
-`application/octet-stream`, which the Rust loader rejects because there is no
-generic binary loader.
+Rust infers a media type from common file extensions when no explicit media type
+is supplied. Unsupported extensions fall back to `application/octet-stream`,
+which the loader rejects because there is no generic binary loader.
 
 Audio and video files are loadable carrier types. WAV files with uncompressed
 PCM sample data are scanned for sample LSB payloads, while other non-image
