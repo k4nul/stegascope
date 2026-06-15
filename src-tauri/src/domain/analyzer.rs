@@ -1908,6 +1908,43 @@ mod tests {
     }
 
     #[test]
+    fn default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers() {
+        let png_secret = b"\x89PNG\r\n\x1A\npipeline-after-iend-blueprint";
+        let png_packet = stegascope_packet("pipeline_after_iend.png", png_secret);
+        let png_bytes = png_with_after_iend_payload(&png_packet);
+        let png_media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", png_bytes.len() as u64, "image/png"),
+            bytes: png_bytes,
+        };
+
+        let png_payloads = extract_payload_candidates(&png_media).unwrap();
+
+        assert!(png_payloads.iter().any(|payload| {
+            payload.file.file_name == "pipeline_after_iend.png"
+                && payload.file.analyzer_name == "png-container-analyzer"
+                && payload.file.validation_status == ValidationStatus::Verified
+                && payload.bytes == png_secret
+        }));
+
+        let jpeg_secret = b"\x89PNG\r\n\x1A\npipeline-after-eoi-blueprint";
+        let jpeg_packet = stegascope_packet("pipeline_after_eoi.png", jpeg_secret);
+        let jpeg_bytes = jpeg_with_after_eoi_payload(&jpeg_packet);
+        let jpeg_media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", jpeg_bytes.len() as u64, "image/jpeg"),
+            bytes: jpeg_bytes,
+        };
+
+        let jpeg_payloads = extract_payload_candidates(&jpeg_media).unwrap();
+
+        assert!(jpeg_payloads.iter().any(|payload| {
+            payload.file.file_name == "pipeline_after_eoi.png"
+                && payload.file.analyzer_name == "jpeg-segment-analyzer"
+                && payload.file.validation_status == ValidationStatus::Verified
+                && payload.bytes == jpeg_secret
+        }));
+    }
+
+    #[test]
     fn metadata_analyzer_extracts_valid_signature_from_custom_ancillary_png_chunk() {
         let bytes = png_with_chunk(*b"stEg", valid_pdf_payload());
         let media = LoadedMedia {
@@ -2038,6 +2075,37 @@ mod tests {
     }
 
     #[test]
+    fn png_container_analyzer_prefers_verified_packet_after_iend_over_signature_candidates() {
+        let secret = b"\x89PNG\r\n\x1A\nverified-after-iend-blueprint";
+        let packet = stegascope_packet("after_iend_blueprint.png", secret);
+        let mut after_iend = valid_pdf_payload().to_vec();
+        after_iend.extend_from_slice(&packet);
+        let bytes = png_with_after_iend_payload(&after_iend);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "after_iend_blueprint.png"
+                && payload.file.file_type == "image/png"
+                && payload.file.analyzer_name == "png-container-analyzer"
+                && payload.file.validation_status == ValidationStatus::Verified
+                && payload.bytes == secret
+        }));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.source == PayloadSource::SignatureScan));
+    }
+
+    #[test]
     fn png_container_analyzer_extracts_valid_signature_after_iend() {
         let bytes = png_with_after_iend_payload(valid_pdf_payload());
         let media = LoadedMedia {
@@ -2121,6 +2189,35 @@ mod tests {
         assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
         assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
         assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_prefers_verified_after_eoi_packet_over_segment_signature_candidates() {
+        let secret = b"\x89PNG\r\n\x1A\nverified-after-eoi-blueprint";
+        let packet = stegascope_packet("after_eoi_blueprint.png", secret);
+        let bytes = jpeg_with_comment_segment_and_after_eoi_payload(valid_pdf_payload(), &packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "after_eoi_blueprint.png"
+                && payload.file.file_type == "image/png"
+                && payload.file.analyzer_name == "jpeg-segment-analyzer"
+                && payload.file.validation_status == ValidationStatus::Verified
+                && payload.bytes == secret
+        }));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.source == PayloadSource::SignatureScan));
     }
 
     #[test]
