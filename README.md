@@ -24,6 +24,13 @@ route analyzer-expansion work, while private maintainer overlays, when present,
 stay ignored by Git. Documentation should describe the current implementation
 without locking in the MVP roadmap.
 
+The active analyzer-expansion phase is `container-side-channels`, with
+`audio-lsb-analysis` listed as the next phase. Source and Rust tests for the WAV
+PCM LSB analyzer already exist, but the phase should not move forward until a
+fresh `npm run build` transition validation passes in a checkout with Node
+dependencies installed. See [Analyzer Phase Readiness](docs/phase-readiness.md)
+for the gate-by-gate handoff.
+
 Current implementation facts:
 
 - Frontend: React 19, TypeScript 5, and Vite.
@@ -95,6 +102,15 @@ npm run tauri -- build
 ```
 
 See [Testing](docs/testing.md) for when each command is appropriate.
+
+For documentation-only changes, use:
+
+```bash
+git diff --check
+```
+
+This verifies patch formatting only; it does not satisfy the analyzer phase
+transition gate.
 
 ## Project Layout
 

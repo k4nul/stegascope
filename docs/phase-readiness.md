@@ -21,6 +21,16 @@ The current phase covers the first image-container analyzer package:
 - PNG compressed `zTXt` and `iTXt` text payload scanning.
 - PNG payload bytes appended after the structural `IEND` chunk.
 
+The practical handoff state is:
+
+- The checked-in JPEG and PNG container-side-channel source evidence is present.
+- Rust analyzer tests for that package are present.
+- WAV PCM LSB source and focused tests are present as pre-transition evidence
+  for the next phase.
+- The phase transition is still blocked until `npm run build` passes locally.
+  A `tsc: not found` result means setup is incomplete, not that source evidence
+  failed.
+
 ## Pre-Transition Audio Evidence
 
 `src-tauri/src/domain/analyzer.rs` also defines `WavPcmLsbAnalyzer` for
@@ -57,6 +67,16 @@ the command that proves the evidence still holds.
 | `rust-analyzer-tests-exist` | Confirm the named manifest evidence tests still exist: compressed PNG text extraction, PNG after-IEND extraction, JPEG COM/APP extraction, JPEG after-EOI extraction, scan-data isolation, and malformed segment handling. | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | `frontend-build-passes` | Confirm the frontend still compiles through the checked-in `build` script. This is the transition command and must be fresh for a phase change. | `npm run build` |
 
+Recommended order:
+
+1. Install local Node dependencies if `node_modules/` is missing:
+   `npm install`.
+2. Run `npm run build`. Stop if this fails; do not change phase state.
+3. Run the focused JPEG and PNG Rust analyzer tests when reviewing only the
+   current phase evidence.
+4. Run the full Rust test command before a phase-transition patch or after any
+   analyzer behavior changes.
+
 For a documentation-only pass, `git diff --check` is sufficient validation of
 the edited files, but it is not transition evidence. A phase-transition patch
 must include a fresh `npm run build` result and should include the Rust analyzer
@@ -82,9 +102,12 @@ ingestion remains a later phase.
 
 The checked-in `container-side-channels` source gates are present, and the WAV
 PCM sample LSB source/test package now exists as pre-transition audio evidence.
-The next implementation boundary is still the later ingestion phase: change the
-current frontend IPC boundary so large media files are not sent as `number[]`
-payloads through `src/api/analysis.ts`.
+The next immediate handoff is validation, not another analyzer rewrite: install
+the local frontend dependencies, rerun the transition command, and only then
+prepare a phase-transition patch if every required gate still matches source.
+The later ingestion phase remains separate: change the current frontend IPC
+boundary so large media files are not sent as `number[]` payloads through
+`src/api/analysis.ts`.
 
 Do not use this documentation note to advance phase state or close the ingestion
 gate. Phase state still needs a passing transition validation run, and the IPC
@@ -121,3 +144,9 @@ dependency manifests, lockfiles, source code, or phase state only to work around
 local setup. When validation is blocked, record the date, exact command, exact
 error, and whether the failure happened before repository code was checked. See
 [Troubleshooting](troubleshooting.md) for npm and Rust/Tauri blocker details.
+
+Current automation context for this documentation handoff: the phase controller
+reported `npm run build` blocked before frontend compilation because `tsc` was
+not found. That is consistent with missing local Node dependencies. The next
+valid phase-transition attempt should begin with dependency setup and a fresh
+`npm run build` result.

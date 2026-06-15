@@ -21,8 +21,9 @@ If startup fails:
 ## Frontend Build Reports `tsc: not found`
 
 `npm run build` starts with `tsc && vite build`. If the shell reports
-`tsc: not found`, the local Node dependencies are not installed in the checkout.
-Run setup first:
+`tsc: not found`, the command stopped before TypeScript checked repository
+source. In this repository that usually means local Node dependencies are not
+installed in the checkout. Run setup first:
 
 ```bash
 npm install
@@ -36,6 +37,10 @@ npm run build
 
 Do not edit dependency manifests to fix this blocker unless the dependency set
 itself is changing.
+
+For phase-transition work, this is a blocker, not passing or failing evidence.
+Keep `docs/instructions/phase-gates.json` unchanged until setup succeeds and a
+fresh `npm run build` result is available.
 
 If `npm ci` cannot resolve `registry.npmjs.org`, fix network or DNS access and
 rerun setup before treating the frontend build as a project failure.

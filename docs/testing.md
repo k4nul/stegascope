@@ -64,6 +64,17 @@ the selected analyzer package. See
 That document also contains a gate-by-gate runbook for checking the JPEG, PNG,
 Rust test, and frontend build evidence before a phase-transition patch.
 
+If `npm run build` reports `tsc: not found`, stop and install local Node
+dependencies before treating the transition command as a source failure:
+
+```bash
+npm install
+npm run build
+```
+
+Do not update phase state from a documentation-only run or from a build attempt
+that stopped before TypeScript compilation began.
+
 For frontend UI or IPC wrapper changes:
 
 ```bash
@@ -90,6 +101,8 @@ The `png_container_analyzer` filter covers after-IEND payload tests. The
 `compressed_png` filter covers the compressed `zTXt`/`iTXt` metadata tests that
 also support the current PNG phase gate. The `wav_pcm_lsb_analyzer` filter
 covers the audio analyzer package without changing phase state by itself.
+Use it to verify the pre-transition audio evidence only after the current
+`container-side-channels` gate is otherwise ready.
 
 For release packaging changes or before creating a distributable:
 

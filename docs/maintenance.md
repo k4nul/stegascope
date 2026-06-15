@@ -72,6 +72,10 @@ Document any skipped validation with the exact blocker.
 - Automation remains disabled by design.
 - Phase transition out of `container-side-channels` still requires a fresh
   `npm run build` result plus the required analyzer evidence gates.
+- The next phase handoff is validation-first: install local Node dependencies if
+  needed, rerun `npm run build`, and record the result before changing phase
+  state. A `tsc: not found` result is a setup blocker, not a repository source
+  failure.
 - The next ingestion phase still requires implementation evidence: large media
   ingestion needs an IPC boundary change. The WAV PCM LSB analyzer has source
   and Rust test coverage, but phase state must still wait for a passing
