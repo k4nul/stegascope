@@ -374,7 +374,6 @@ fn download_extracted_file_with_state(
 pub fn run() {
     tauri::Builder::default()
         .manage(AppState::default())
-        .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_dialog::init())
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
