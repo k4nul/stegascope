@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "1.0.0",
+  "kind": "project_policy",
+  "projectId": "stegascope",
+  "instructionPolicy": {
+    "format": "json_schema_not_prose",
+    "directory": "docs/management",
+    "requiredFiles": [
+      "docs/management/INDEX.json",
+      "docs/management/PROJECT.json",
+      "docs/management/ARCHITECTURE.json",
+      "docs/management/PLAN.json",
+      "docs/management/VALIDATION.json",
+      "docs/management/POLICY.json",
+      "docs/management/AUTOMATION.json",
+      "docs/management/REVIEW_FINDINGS.json"
+    ],
+    "agentsMdMayContainOnlyMap": true
+  },
+  "folderPolicy": {
+    "rootDocDirectoryAllowed": false,
+    "machineReadableControlDocsDirectory": "docs/control",
+    "managementInstructionsDirectory": "docs/management"
+  },
+  "harnessPolicy": {
+    "doNotChangeHarnessStructure": true,
+    "doNotMoveCodexMaintainerHarnessFiles": true,
+    "projectLocalCodexPromptsMayRemainForHarnessCompatibility": true
+  },
+  "reviewWorkflowPolicy": {
+    "reviewAgent": "Claude Code",
+    "reviewMode": "code_review_and_inspection",
+    "findingInstructionFile": "docs/management/REVIEW_FINDINGS.json",
+    "findingWriteRule": "Claude Code records review and inspection findings in the findings file instead of implementing by default.",
+    "codexReadRequirement": "Codex must read the findings file before automation implementation work.",
+    "codexPriorityRule": "Codex resolves active Claude Code findings before other implementation tasks unless the user explicitly overrides the priority."
+  },
+  "commitPolicy": {
+    "messageFormat": "type(scope): subject",
+    "allowedTypes": [
+      "feat",
+      "fix",
+      "docs",
+      "style",
+      "refactor",
+      "test",
+      "chore",
+      "perf",
+      "build",
+      "ci",
+      "rename",
+      "remove"
+    ],
+    "scopePattern": "[a-z0-9][a-z0-9-]*",
+    "subjectPolicy": "Use a concise imperative subject that describes the single purpose of the commit.",
+    "historyPolicy": "All commits on published project branches must follow this format before push. When owner-approved history repair is required, rewrite only commit messages and preserve original author and committer dates."
+  }
+}
