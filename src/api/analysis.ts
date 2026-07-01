@@ -25,6 +25,7 @@ export type MediaFileInfo = {
 };
 
 export type ExtractedFile = {
+  id: string;
   fileName: string;
   analyzerName: string;
   suspiciousLevel: SuspiciousLevel;
@@ -84,14 +85,12 @@ export const getExtractedFiles = async (taskId: string): Promise<ExtractedFile[]
 
 export const downloadExtractedFile = async (
   taskId: string,
-  fileName: string,
-  analyzerName: string,
+  fileId: string,
   targetPath: string,
 ): Promise<DownloadExtractedFileResponse> => {
   return invoke<DownloadExtractedFileResponse>("download_extracted_file", {
     taskId,
-    fileName,
-    analyzerName,
+    fileId,
     targetPath,
   });
 };

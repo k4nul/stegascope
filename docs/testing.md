@@ -9,13 +9,17 @@ changed.
 | Scope | Command | Notes |
 | --- | --- | --- |
 | Frontend or Vite changes | `npm run build` | Runs `tsc && vite build`. |
+| Download IPC contract changes | `npm run validate:download-ipc` | Dependency-free static check that payload IDs are assigned from the Rust payload identity, stored with current task payload bytes, passed by every frontend download callsite as `file.id`, resolved by Rust before download, and listed in phase evidence. |
+| Phase evidence review | `npm run validate:phase-evidence` | Dependency-free static check that the phase model, phase manifest, maintained docs, build-script gate, JPEG/PNG source evidence, named Rust analyzer test functions, local-file boundary, payload-ID download validator, and informational WAV pre-transition evidence still line up. It does not replace `npm run build` or Rust tests for a phase transition. |
+| Static recovery chain | `npm run validate:static` | Dependency-free validator chain that syntax-checks both local validator scripts, then runs the phase evidence validator directly; the phase evidence validator includes the download IPC contract check. |
 | Rust or Tauri backend changes | `cargo check --manifest-path src-tauri/Cargo.toml` | Fast Rust/Tauri compile check. |
 | Analyzer behavior changes | `cargo test --manifest-path src-tauri/Cargo.toml` | Runs inline Rust unit tests, including analyzer tests. |
 | Release packaging | `npm run tauri -- build` | Runs the frontend build through Tauri and creates bundle artifacts. |
-| Documentation-only changes | `git diff --check` | Checks whitespace and patch formatting when no docs-specific validator exists. |
+| Generic documentation-only changes | `git diff --check` | Checks whitespace and patch formatting when no docs-specific validator exists. |
+| Phase handoff or validator documentation changes | `npm run validate:static` | Runs the dependency-free static chain that protects the phase handoff docs, validator wiring, and current evidence names. |
 
-`npm install` is setup, not validation. It creates `node_modules/` and should be
-run only when dependencies need to be installed locally.
+`npm ci` is setup, not validation. It creates `node_modules/` from the checked-in
+lockfile and should be run only when dependencies need to be installed locally.
 
 ## Existing Coverage
 
@@ -29,10 +33,19 @@ extraction behavior, including:
 - Non-image media ignored by image-only analyzers.
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
+- PNG metadata boundary handling that ignores chunks after the structural
+  `IEND` marker.
 - Compressed PNG `zTXt`/`iTXt` metadata payload extraction.
-- PNG after-IEND packet and signature candidate extraction.
+- PNG after-IEND packet and signature candidate extraction, including invalid
+  packet fallback to signature evidence.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
-  malformed segment safety, and scan-data isolation.
+  malformed segment safety, scan-data isolation, marker-shaped scan-data
+  isolation, byte-stuffed SOS EOI isolation, SOS restart/fill marker
+  isolation, malformed SOS marker recovery, malformed SOS false-EOI length
+  recovery, post-SOS marker-segment skipping, and after-EOI evidence labeling.
+- Container side-channel boundaries, including metadata chunks after structural
+  PNG `IEND`, JPEG marker-like bytes after structural EOI, and same-name
+  distinct payload preservation.
 - WAV PCM sample LSB packet and signature extraction, plus unsupported or
   truncated WAV safety.
 - Two-bit-per-pixel channel and matrix strategies.
@@ -41,7 +54,8 @@ extraction behavior, including:
 - Invalid MP3 candidate rejection.
 
 There are initial command-level Rust tests for create, byte-input attach,
-path-based attach, analyze, list-extracted-files, and download command flow.
+path-based attach, analyze, list-extracted-files, download command flow, and
+same-name payload download disambiguation.
 There are no frontend tests, negative-path command-level Rust tests for every
 Tauri command, or end-to-end desktop workflow tests yet.
 
@@ -51,11 +65,29 @@ artifacts for analyzer coverage.
 
 ## Recommended Validation By Change Type
 
-For documentation-only changes:
+For generic documentation-only changes:
 
 ```bash
 git diff --check
 ```
+
+When `docs/instructions/phase-gates.json` changes, also parse it:
+
+```bash
+python3 -m json.tool docs/instructions/phase-gates.json
+```
+
+For a dependency-free static review of the current phase evidence and
+documentation handoff, or after editing phase handoff docs, run:
+
+```bash
+npm run validate:static
+```
+
+The phase evidence validator guards the README, architecture, onboarding,
+maintenance, troubleshooting, and phase-readiness docs against drift from the
+current phase, analyzer registry, named Rust analyzer test functions, local-file
+boundary, payload ID download contract, and setup-blocker guidance.
 
 Documentation-only validation does not satisfy the phase transition gate. Before
 changing `current_phase` in `docs/instructions/phase-gates.json`, rerun the
@@ -69,7 +101,7 @@ If `npm run build` reports `tsc: not found`, stop and install local Node
 dependencies before treating the transition command as a source failure:
 
 ```bash
-npm install
+npm ci
 npm run build
 ```
 
@@ -79,7 +111,15 @@ that stopped before TypeScript compilation began.
 For frontend UI or IPC wrapper changes:
 
 ```bash
+npm run validate:phase-evidence
+npm run validate:download-ipc
 npm run build
+```
+
+For the current frontend-to-Rust local-file attach boundary:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_reads_local_media_path
 ```
 
 For Rust command, loader, task, or analyzer changes:
@@ -95,15 +135,56 @@ For a focused review of the current container-side-channel analyzer package:
 cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml png_container_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml compressed_png
-cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb_analyzer
+cargo test --manifest-path src-tauri/Cargo.toml default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers
 ```
 
 The `png_container_analyzer` filter covers after-IEND payload tests. The
 `compressed_png` filter covers the compressed `zTXt`/`iTXt` metadata tests that
-also support the current PNG phase gate. The `wav_pcm_lsb_analyzer` filter
-covers the audio analyzer package without changing phase state by itself.
-Use it to verify the pre-transition audio evidence only after the current
-`container-side-channels` gate is otherwise ready.
+also support the current PNG phase gate. The default-pipeline filter proves the
+registered analyzer set emits both PNG after-IEND and JPEG after-EOI packet
+payloads through the current pipeline.
+
+For the pre-transition audio evidence, after the current
+`container-side-channels` gate is otherwise ready:
+
+```bash
+cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb
+```
+
+This filter covers the audio analyzer package and default pipeline WAV evidence
+without changing phase state by itself.
+
+For the payload identity and same-name download path:
+
+```bash
+npm run validate:download-ipc
+cargo test --manifest-path src-tauri/Cargo.toml finalize_extracted_payloads
+cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids
+cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_uses_recovered_bytes_for_same_name_payloads
+cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_is_stable_for_identical_payload_identity
+cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_separates_payload_source_and_analyzer_identity
+cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_separates_embedded_name_and_file_type
+cargo test --manifest-path src-tauri/Cargo.toml replace_extracted_payloads_dedupes_exact_payloads_before_assigning_ids
+cargo test --manifest-path src-tauri/Cargo.toml replace_extracted_payloads_prefers_verified_payloads_before_assigning_ids
+cargo test --manifest-path src-tauri/Cargo.toml metadata_analyzer_preserves_distinct_packets_with_same_embedded_name
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_writes_current_payload_bytes
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_stale_payload_id_after_result_replacement
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_uses_file_id_for_same_name_payloads
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_uses_file_id_for_same_name_signature_scan_payloads
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_blank_payload_id
+cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_missing_payload_bytes
+cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_disambiguates_same_name_packet_payloads
+cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_rejects_payload_id_after_reattach
+```
+
+These tests verify that exact duplicate payload records collapse, task storage
+keeps verified packet payloads ahead of signature-only fallback candidates,
+distinct same-name recovered byte streams remain visible for verified packets
+and signature scans, IDs for payloads no longer present in the current result
+are rejected after result replacement or media reattach/reanalysis, blank
+payload IDs fail required-field validation, and downloads use payload IDs
+instead of the displayed file name. The missing payload filter covers the
+negative path where the requested payload ID is not in the current result.
 
 For release packaging changes or before creating a distributable:
 

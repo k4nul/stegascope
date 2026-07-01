@@ -63,7 +63,7 @@ The Rust domain layer is organized under `src-tauri/src/domain/`:
 
 ## Analyzer Pipeline
 
-`default_analyzers()` currently registers image and byte-oriented analyzers:
+`default_analyzers()` currently registers image, audio, and byte-oriented analyzers:
 
 - `metadata-analyzer`
 - `png-container-analyzer`
@@ -73,11 +73,13 @@ The Rust domain layer is organized under `src-tauri/src/domain/`:
 - `lsb-2bpp-analyzer`
 - `wav-pcm-lsb-analyzer`
 
-The command flow in `analyze_task` runs those analyzers, collects payload
-candidates, finalizes them through `finalize_extracted_payloads`, and stores the
-result on the task. Verified StegaScope packets take priority over
-signature-only candidates during finalization so a stronger payload match does
-not compete with weaker duplicate evidence.
+The command flow in `analyze_task` runs those analyzers and passes collected
+payload candidates into task replacement. Task replacement finalizes payloads
+through `finalize_extracted_payloads` before storing metadata and bytes.
+Verified StegaScope packets take priority over signature-only candidates during
+finalization. Finalization removes exact duplicate payload records while
+preserving distinct recovered byte streams, even when two side-channel packets
+report the same embedded file name.
 
 Audio and video files can be attached through their loaders. The audio-specific
 LSB analyzer is intentionally narrow: it parses RIFF/WAVE files with
@@ -88,10 +90,15 @@ byte-oriented signature scanning until their own analyzer phases are selected.
 ## Payload Download Path
 
 Recovered payload bytes stay in Rust task state alongside the displayed
-`ExtractedFile` metadata. The frontend requests a download by task ID, file
-name, analyzer name, and target path. Rust validates that the selected payload
-still exists for the task, creates parent directories when needed, and writes
-the exact recovered bytes to disk.
+`ExtractedFile` metadata. Each displayed extracted file includes a deterministic
+opaque payload identifier derived from the analyzer name, embedded file name,
+file type, payload source, and recovered bytes, so same-name payloads remain
+independently selectable. The frontend requests a download by task ID, payload
+identifier, and target path. Rust accepts the identifier only when a matching
+payload exists in the task's current analysis result, creates parent directories
+when needed, and writes the exact recovered bytes to disk. Payload identifiers
+are not stable external artifact IDs or per-run nonces; an identical payload
+identity can produce the same ID in a later analysis.
 
 ## Diagram Status
 

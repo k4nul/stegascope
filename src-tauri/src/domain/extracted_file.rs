@@ -60,6 +60,7 @@ impl FileSignature {
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct ExtractedFile {
+    pub id: String,
     pub file_name: String,
     pub analyzer_name: String,
     pub suspicious_level: SuspiciousLevel,
@@ -81,15 +82,50 @@ impl ExtractedFile {
         file_type: impl Into<String>,
         file_signature: FileSignature,
     ) -> Self {
+        let file_name = file_name.into();
+        let analyzer_name = analyzer_name.into();
+        let file_type = file_type.into();
+
         Self {
-            file_name: file_name.into(),
-            analyzer_name: analyzer_name.into(),
+            id: metadata_id(&file_name, &analyzer_name, &file_type),
+            file_name,
+            analyzer_name,
             suspicious_level,
             validation_status,
             validation_note: validation_note.into(),
             file_size_bytes,
-            file_type: file_type.into(),
+            file_type,
             file_signature,
         }
+    }
+
+    pub fn with_id(mut self, id: impl Into<String>) -> Self {
+        self.id = id.into();
+        self
+    }
+}
+
+fn metadata_id(file_name: &str, analyzer_name: &str, file_type: &str) -> String {
+    let joined = format!("{analyzer_name}-{file_name}-{file_type}");
+    let replaced = joined
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '-'
+            }
+        })
+        .collect::<String>();
+    let sanitized = replaced
+        .split('-')
+        .filter(|part| !part.is_empty())
+        .collect::<Vec<_>>()
+        .join("-");
+
+    if sanitized.is_empty() {
+        "extracted-file".to_string()
+    } else {
+        sanitized
     }
 }

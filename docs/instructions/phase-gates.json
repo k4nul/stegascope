@@ -4,20 +4,22 @@
   "current_phase": "container-side-channels",
   "next_phase": "audio-lsb-analysis",
   "transition": {
-    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented, tested, and the current frontend/Rust local-file boundary remains explicit.",
+    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented and tested, same-name payload downloads use deterministic payload IDs with current-result lookup, and the current frontend/Rust local-file boundary remains explicit.",
     "mode": "machine-gated-analyzer-expansion",
     "validation_command": "npm run build",
     "transition_validation_command": "npm run build",
-    "decision_rule": "All required gates must be passed, machine-checkable, or waived before changing current_phase."
+    "decision_rule": "All required gates must pass their validation evidence or be explicitly waived before changing current_phase; machine-check status describes how a gate is validated, not a pass result."
   },
   "phase_model": [
     {
       "id": "container-side-channels",
-      "purpose": "Implement the first image-container analyzer package for JPEG and PNG side-channel evidence.",
+      "purpose": "Implement the first image-container analyzer package for JPEG and PNG side-channel evidence, including current-result payload ID disambiguation for extracted downloads.",
       "allowed_work": [
         "JPEG segment analysis",
         "PNG deep container analysis",
         "Rust analyzer tests",
+        "local file boundary evidence",
+        "deterministic payload ID download disambiguation",
         "frontend build validation"
       ],
       "blocked_work": [
@@ -29,12 +31,14 @@
         "JPEG segment analyzer exists",
         "PNG deep container scan exists",
         "Rust analyzer tests cover the package",
+        "local file boundary evidence exists",
+        "same-name payload ID download lookup exists",
         "frontend build passes"
       ]
     },
     {
       "id": "audio-lsb-analysis",
-      "purpose": "Add the next audio-focused analyzer package after image-container analysis is stable.",
+      "purpose": "Validate and formalize the existing WAV PCM LSB analyzer package after image-container analysis is stable.",
       "allowed_work": [
         "WAV PCM sample LSB analysis",
         "focused analyzer tests"
@@ -43,24 +47,26 @@
         "broad media pipeline rewrites before Rust-side ingestion is selected"
       ],
       "exit_criteria": [
-        "WAV PCM LSB analyzer exists",
+        "WAV PCM LSB analyzer evidence is validated",
         "audio analyzer tests pass"
       ]
     },
     {
       "id": "rust-side-ingestion",
-      "purpose": "Move large media ingestion to Rust-side file handling.",
+      "purpose": "Harden Rust-side local file ingestion and retire legacy byte-input compatibility after current path-based attach evidence is stable.",
       "allowed_work": [
         "IPC boundary hardening",
         "local file handling",
-        "command-level validation"
+        "command-level validation",
+        "legacy byte-input compatibility cleanup"
       ],
       "blocked_work": [
         "cloud upload or external service dependencies"
       ],
       "exit_criteria": [
-        "frontend no longer sends large byte arrays over IPC",
-        "command-level tests cover attach and analyze behavior"
+        "path-based attach remains the frontend default",
+        "legacy byte-input command is removed or explicitly retained for a documented compatibility caller",
+        "command-level tests cover attach, analyze, and invalid-path behavior"
       ]
     },
     {
@@ -99,16 +105,93 @@
         "src-tauri/src/domain/analyzer.rs",
         "metadata_analyzer_extracts_valid_signature_from_compressed_png_text_chunks",
         "metadata_analyzer_extracts_packet_payload_from_compressed_png_itxt_chunk",
+        "metadata_analyzer_preserves_distinct_packets_with_same_embedded_name",
         "default_pipeline_extracts_packet_payload_from_compressed_png_ztxt_chunk",
+        "default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers",
         "png_container_analyzer_extracts_packet_payload_after_iend",
         "png_container_analyzer_uses_structural_iend_for_trailing_payload",
         "jpeg_segment_analyzer_extracts_packet_payload_from_comment_segment",
         "jpeg_segment_analyzer_extracts_valid_signature_after_eoi",
+        "jpeg_segment_analyzer_labels_post_eoi_data_as_after_eoi_not_segment",
+        "jpeg_segment_analyzer_extracts_valid_signature_from_app_segment",
+        "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",
+        "jpeg_segment_analyzer_does_not_treat_comment_data_after_false_eoi_as_trailing_payload",
         "jpeg_segment_analyzer_does_not_scan_sos_image_data_as_segment_payload",
+        "jpeg_segment_analyzer_ignores_marker_shaped_sos_image_data",
+        "jpeg_segment_analyzer_ignores_byte_stuffed_eoi_in_sos_scan_data",
+        "jpeg_segment_analyzer_ignores_restart_and_fill_markers_in_sos_scan_data",
+        "jpeg_segment_analyzer_recovers_after_malformed_sos_marker_shaped_data",
+        "jpeg_segment_analyzer_ignores_false_eoi_in_malformed_sos_marker_length",
+        "jpeg_segment_analyzer_skips_post_sos_segment_payload_when_finding_after_eoi",
         "jpeg_segment_analyzer_handles_malformed_segment_lengths",
         "cargo test --manifest-path src-tauri/Cargo.toml"
       ],
       "on_failure": "Stay in container-side-channels and add focused Rust analyzer tests."
+    },
+    {
+      "id": "local-file-boundary-evidence",
+      "status": "machine-check",
+      "required_for_transition": true,
+      "description": "The frontend/Rust local-file boundary must remain explicit for the desktop attach flow.",
+      "evidence": [
+        "src/App.tsx",
+        "src/api/analysis.ts",
+        "src-tauri/src/lib.rs",
+        "attachMediaFile",
+        "attach_media_file_from_path",
+        "attach_media_file_from_path_command_test_reads_local_media_path",
+        "cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_reads_local_media_path"
+      ],
+      "on_failure": "Stay in container-side-channels and restore the path-based frontend/Rust attach boundary before phase transition."
+    },
+    {
+      "id": "payload-id-download-disambiguation",
+      "status": "machine-check",
+      "required_for_transition": true,
+      "description": "Extracted payload rows must expose deterministic payload IDs, and the download command must resolve them against the current analysis result so same-name recovered byte streams remain independently downloadable.",
+      "evidence": [
+        "src-tauri/src/domain/analyzer_pipeline.rs",
+        "src-tauri/src/domain/task.rs",
+        "src-tauri/src/lib.rs",
+        "src/App.tsx",
+        "src/api/analysis.ts",
+        "finalize_extracted_payloads",
+        "assign_payload_ids",
+        "assign_payload_ids_uses_recovered_bytes_for_same_name_payloads",
+        "assign_payload_ids_is_stable_for_identical_payload_identity",
+        "assign_payload_ids_separates_payload_source_and_analyzer_identity",
+        "assign_payload_ids_separates_embedded_name_and_file_type",
+        "replace_extracted_payloads_dedupes_exact_payloads_before_assigning_ids",
+        "replace_extracted_payloads_prefers_verified_payloads_before_assigning_ids",
+        "metadata_analyzer_preserves_distinct_packets_with_same_embedded_name",
+        "download_extracted_file_command_test_writes_current_payload_bytes",
+        "download_extracted_file_command_test_rejects_stale_payload_id_after_result_replacement",
+        "download_extracted_file_command_test_uses_file_id_for_same_name_payloads",
+        "download_extracted_file_command_test_uses_file_id_for_same_name_signature_scan_payloads",
+        "download_extracted_file_command_test_rejects_blank_payload_id",
+        "download_extracted_file_command_test_rejects_missing_payload_bytes",
+        "analyze_and_download_command_test_disambiguates_same_name_packet_payloads",
+        "analyze_and_download_command_test_rejects_payload_id_after_reattach",
+        "npm run validate:download-ipc",
+        "cargo test --manifest-path src-tauri/Cargo.toml finalize_extracted_payloads",
+        "cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids",
+        "cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_uses_recovered_bytes_for_same_name_payloads",
+        "cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_is_stable_for_identical_payload_identity",
+        "cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_separates_payload_source_and_analyzer_identity",
+        "cargo test --manifest-path src-tauri/Cargo.toml assign_payload_ids_separates_embedded_name_and_file_type",
+        "cargo test --manifest-path src-tauri/Cargo.toml replace_extracted_payloads_dedupes_exact_payloads_before_assigning_ids",
+        "cargo test --manifest-path src-tauri/Cargo.toml replace_extracted_payloads_prefers_verified_payloads_before_assigning_ids",
+        "cargo test --manifest-path src-tauri/Cargo.toml metadata_analyzer_preserves_distinct_packets_with_same_embedded_name",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_writes_current_payload_bytes",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_stale_payload_id_after_result_replacement",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_uses_file_id_for_same_name_payloads",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_uses_file_id_for_same_name_signature_scan_payloads",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_blank_payload_id",
+        "cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_missing_payload_bytes",
+        "cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_disambiguates_same_name_packet_payloads",
+        "cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_rejects_payload_id_after_reattach"
+      ],
+      "on_failure": "Stay in container-side-channels and restore deterministic payload IDs with current-result download lookup before phase transition."
     },
     {
       "id": "jpeg-segment-analyzer-exists",
@@ -141,6 +224,26 @@
         "png_after_iend_payload"
       ],
       "on_failure": "Implement the PNG deep container scan before phase transition."
+    },
+    {
+      "id": "wav-pcm-lsb-pretransition-evidence",
+      "status": "machine-check",
+      "required_for_transition": false,
+      "description": "Pre-transition source and test evidence for the next audio-lsb-analysis phase must remain visible, but this informational gate does not advance current_phase without a passing transition validation run.",
+      "evidence": [
+        "src-tauri/src/domain/analyzer.rs",
+        "src-tauri/src/domain/analyzer_pipeline.rs",
+        "WavPcmLsbAnalyzer",
+        "wav_pcm_data",
+        "extract_wav_pcm_lsb_bits",
+        "Box::<WavPcmLsbAnalyzer>::default()",
+        "wav_pcm_lsb_analyzer_extracts_packet_payload_from_16_bit_samples",
+        "wav_pcm_lsb_analyzer_extracts_valid_signature_from_8_bit_samples",
+        "default_pipeline_extracts_packet_payload_from_wav_pcm_lsb",
+        "wav_pcm_lsb_analyzer_ignores_unsupported_or_truncated_wav",
+        "cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb"
+      ],
+      "on_failure": "Keep audio-lsb-analysis as next_phase and restore WAV PCM LSB source/test evidence before any later phase-transition review."
     }
   ]
 }

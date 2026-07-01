@@ -53,8 +53,8 @@ Registered Rust commands include:
 - `analyze_task`: runs the default analyzer set and replaces the task's extracted
   files with the latest payload candidates.
 - `get_extracted_files`: returns the extracted file metadata for a task.
-- `download_extracted_file`: writes a selected extracted payload to the chosen
-  target path.
+- `download_extracted_file`: writes the selected payload identifier's recovered
+  bytes to the chosen target path.
 - `bootstrap_status`: reports app/package status.
 
 The frontend wrappers in `src/api/analysis.ts` currently cover the user-facing
@@ -106,8 +106,13 @@ WAV PCM sample LSB source and tests now exist, but the machine-readable phase
 state remains unchanged until the transition validation gate passes.
 
 Verified StegaScope packets are preferred over signature-only candidates during
-finalization. Extracted payload metadata and payload bytes are tracked together
-so the UI can show metadata and later save the exact recovered bytes.
+finalization. Finalization removes exact duplicate payload records only,
+preserves distinct same-name byte streams, and assigns opaque payload IDs for
+download selection. Downloads accept an ID only while the matching payload is in
+the running task's current analysis result; IDs are not long-lived case
+artifacts or per-run nonces. Extracted payload metadata and payload bytes are
+tracked together so the UI can show metadata and later save the exact recovered
+bytes.
 
 ## Development Entry Points
 

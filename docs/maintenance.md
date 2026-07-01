@@ -11,15 +11,23 @@ repository intentionally ignores private local maintainer files:
 
 - `AGENTS.md`
 - `.codex/`
-- `docs/management/`
+- generated `docs/management/` files other than the tracked
+  `docs/management/POLICY.json` policy marker
 
 Do not add or track those private files during ordinary documentation, test,
-lint, or implementation maintenance. Checked-in phase guidance lives in
-`docs/instructions/phase-gates.json` and may be read by local maintainer tooling,
-but phase state must not be changed unless the manifest validation command and
-required evidence gates pass. Public automation activation still requires a
-product direction decision and an explicit tracked configuration in a future
-change.
+lint, or implementation maintenance. The checked-in policy marker documents
+which local management files may exist in operator checkouts without requiring
+them in the public handoff. Checked-in phase guidance lives in
+`docs/instructions/phase-gates.json` and may be read by local maintainer
+tooling, but phase state must not be changed unless the manifest validation
+command and required evidence gates pass. Public automation activation still
+requires a product direction decision and an explicit tracked configuration in a
+future change.
+
+If a local automation report mentions ignored management files from another
+checkout, treat them as private context only; the tracked handoff remains this
+maintenance note, `docs/instructions/phase-gates.json`, and
+`docs/phase-readiness.md`.
 
 ## Safe Edit Boundaries
 
@@ -59,6 +67,10 @@ For phase evidence and the transition boundary between
 Use the narrowest command that matches the touched scope:
 
 - Documentation-only: `git diff --check`
+- Phase gate metadata: `python3 -m json.tool docs/instructions/phase-gates.json`
+- Dependency-free static recovery chain: `npm run validate:static`
+- Phase evidence static review: `npm run validate:phase-evidence`
+- Download IPC contract static review: `npm run validate:download-ipc`
 - Frontend or Vite changes: `npm run build`
 - Rust or Tauri backend changes: `cargo check --manifest-path src-tauri/Cargo.toml`
 - Analyzer behavior changes: `cargo test --manifest-path src-tauri/Cargo.toml`
@@ -81,9 +93,9 @@ Document any skipped validation with the exact blocker.
   transition validation run. Do not change phase state with documentation-only
   updates.
 - Command-level Rust coverage is partial; create, attach, analyze,
-  list-extracted-files, and download flow have initial tests, while
-  negative-path attach/analyze and cross-command state transitions still need
-  coverage.
+  list-extracted-files, download flow, and stale payload-ID rejection after
+  reattach/reanalysis have initial tests, while broader negative-path
+  attach/analyze and cross-command state transitions still need coverage.
 - Frontend UI/API flow tests are missing.
 - Large media handling now uses a path-based frontend attach flow. A later
   cleanup can remove the legacy byte-input attach command after compatibility

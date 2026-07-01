@@ -6,15 +6,18 @@
     "format": "json_schema_not_prose",
     "directory": "docs/management",
     "requiredFiles": [
+      "docs/management/POLICY.json"
+    ],
+    "privateLocalFiles": [
       "docs/management/INDEX.json",
       "docs/management/PROJECT.json",
       "docs/management/ARCHITECTURE.json",
       "docs/management/PLAN.json",
       "docs/management/VALIDATION.json",
-      "docs/management/POLICY.json",
       "docs/management/AUTOMATION.json",
       "docs/management/REVIEW_FINDINGS.json"
     ],
+    "privateLocalFilesMayBeAbsentFromPublicCheckout": true,
     "agentsMdMayContainOnlyMap": true
   },
   "folderPolicy": {
@@ -31,8 +34,9 @@
     "reviewAgent": "Claude Code",
     "reviewMode": "code_review_and_inspection",
     "findingInstructionFile": "docs/management/REVIEW_FINDINGS.json",
+    "findingFileAvailability": "private local management file; when absent from a public checkout, treat active findings as unavailable instead of creating tracked findings",
     "findingWriteRule": "Claude Code records review and inspection findings in the findings file instead of implementing by default.",
-    "codexReadRequirement": "Codex must read the findings file before automation implementation work.",
+    "codexReadRequirement": "Codex must read the findings file before automation implementation work when that private local file exists.",
     "codexPriorityRule": "Codex resolves active Claude Code findings before other implementation tasks unless the user explicitly overrides the priority."
   },
   "commitPolicy": {

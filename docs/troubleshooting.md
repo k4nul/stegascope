@@ -12,7 +12,7 @@ is already in use.
 
 If startup fails:
 
-1. Confirm dependencies are installed with `npm install`.
+1. Confirm dependencies are installed with `npm ci`.
 2. Confirm port `1420` is available.
 3. Run `npm run build` to separate TypeScript/Vite failures from Tauri runtime
    failures.
@@ -26,7 +26,7 @@ source. In this repository that usually means local Node dependencies are not
 installed in the checkout. Run setup first:
 
 ```bash
-npm install
+npm ci
 ```
 
 Then rerun:
@@ -93,8 +93,9 @@ No candidates can be a valid result. The analyzer note reports that no extracted
 payload candidates were found when the registered analyzers do not detect a known
 signature, verified StegaScope packet, metadata payload, or supported LSB payload.
 
-For image LSB analysis, the media must decode successfully as an image. For
-non-image media, the LSB analyzers return no candidates.
+For image LSB analysis, the media must decode successfully as an image. The
+image-only LSB analyzers return no candidates for non-image media, while
+uncompressed PCM WAV carriers can be scanned by the audio-specific LSB analyzer.
 
 For PNG container analysis, candidates are limited to bytes appended after the
 structural `IEND` chunk. Payload-like bytes in malformed or truncated PNG chunks
@@ -119,13 +120,16 @@ in-memory task store. Create a new task after restart.
 `download_extracted_file` requires:
 
 - a valid current task ID,
-- a file name and analyzer name that match an extracted payload from the latest
-  analysis result,
+- a payload identifier from the current analysis result,
 - a non-empty target path, and
 - a target path that is not a directory.
 
 The command creates parent directories when needed and writes the recovered
-payload bytes to the selected path.
+payload bytes to the selected path. A payload identifier is accepted only when
+the matching payload exists in the running task's current analysis result; it is
+not a durable case artifact ID or a per-run nonce. If two extracted rows share
+the same displayed file name, select distinct save paths when exporting both
+rows; writing to the same path follows normal filesystem overwrite behavior.
 
 ## Release Build Fails
 

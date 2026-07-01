@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 
 use super::analyzer_pipeline::{
-    dedupe_payloads, outcome_prefer_verified, payloads_prefer_verified,
+    assign_payload_ids, dedupe_payloads, outcome_prefer_verified, payloads_prefer_verified,
 };
 use crate::domain::{
     ExtractedFile, FileSignature, MediaFileInfo, SuspiciousLevel, ValidationStatus,
@@ -75,6 +75,7 @@ impl AnalysisOutcome {
 
     pub fn from_payloads(mut extracted_payloads: Vec<ExtractedPayload>) -> Self {
         dedupe_payloads(&mut extracted_payloads);
+        assign_payload_ids(&mut extracted_payloads);
         let extracted_files = extracted_payloads
             .iter()
             .map(|payload| payload.file.clone())
@@ -872,18 +873,6 @@ fn jpeg_payload_segments(bytes: &[u8]) -> Vec<JpegSegment<'_>> {
 
     while let Some(marker) = next_jpeg_marker(bytes, offset) {
         if marker.marker == 0xD9 || marker.marker == 0xDA {
-            if marker.marker == 0xDA {
-                let Some((_, scan_data_start)) =
-                    jpeg_segment_data_bounds(bytes, marker.payload_offset)
-                else {
-                    break;
-                };
-                let Some(next_marker) = next_jpeg_marker(bytes, scan_data_start) else {
-                    break;
-                };
-                offset = next_marker.marker_offset;
-                continue;
-            }
             break;
         }
 
@@ -991,8 +980,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
             0xD9 => return Some(marker.payload_offset),
             0xDA => {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
-                let next_marker = next_jpeg_marker(bytes, scan_data_start)?;
-                offset = next_marker.marker_offset;
+                return jpeg_scan_data_eoi_end(bytes, scan_data_start);
             }
             marker if jpeg_marker_has_no_payload(marker) => {
                 offset = marker.payload_offset;
@@ -1005,6 +993,56 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
     }
 
     None
+}
+
+fn jpeg_scan_data_eoi_end(bytes: &[u8], mut offset: usize) -> Option<usize> {
+    while offset < bytes.len() {
+        if bytes[offset] != 0xFF {
+            offset += 1;
+            continue;
+        }
+
+        while offset < bytes.len() && bytes[offset] == 0xFF {
+            offset += 1;
+        }
+
+        if offset >= bytes.len() {
+            return None;
+        }
+
+        let marker = bytes[offset];
+        offset += 1;
+
+        match marker {
+            0x00 => continue,
+            0xD9 => return Some(offset),
+            0x01 | 0xD0..=0xD7 => continue,
+            0xDA => {
+                if let Some((_, scan_data_start)) = jpeg_segment_data_bounds(bytes, offset) {
+                    offset = scan_data_start;
+                } else {
+                    offset = skip_malformed_jpeg_segment_length(bytes, offset);
+                }
+            }
+            marker if jpeg_marker_has_no_payload(marker) => continue,
+            _ => {
+                if let Some((_, data_end)) = jpeg_segment_data_bounds(bytes, offset) {
+                    offset = data_end;
+                } else {
+                    offset = skip_malformed_jpeg_segment_length(bytes, offset);
+                }
+            }
+        }
+    }
+
+    None
+}
+
+fn skip_malformed_jpeg_segment_length(bytes: &[u8], length_offset: usize) -> usize {
+    length_offset
+        .checked_add(2)
+        .map(|offset| offset.min(bytes.len()))
+        .unwrap_or(bytes.len())
 }
 
 fn jpeg_marker_has_no_payload(marker: u8) -> bool {
@@ -2033,6 +2071,69 @@ mod tests {
     }
 
     #[test]
+    fn metadata_analyzer_preserves_distinct_packets_with_same_embedded_name() {
+        let first_secret = b"%PDF-1.7\nfirst same-name payload\n%%EOF\n";
+        let second_secret = b"%PDF-1.7\nsecond same-name payload\n%%EOF\n";
+        let first_packet = stegascope_packet("shared_note.pdf", first_secret);
+        let second_packet = stegascope_packet("shared_note.pdf", second_secret);
+        let first_chunk = png_text_chunk_data(b"Comment", &first_packet);
+        let second_chunk = png_text_chunk_data(b"Comment", &second_packet);
+        let bytes = png_with_chunks(&[
+            (*b"tEXt", first_chunk.as_slice()),
+            (*b"tEXt", second_chunk.as_slice()),
+        ]);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+        let shared_payloads = outcome
+            .extracted_payloads
+            .iter()
+            .filter(|payload| payload.file.file_name == "shared_note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(shared_payloads.len(), 2);
+        assert!(shared_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(shared_payloads
+            .iter()
+            .any(|payload| payload.bytes == first_secret));
+        assert!(shared_payloads
+            .iter()
+            .any(|payload| payload.bytes == second_secret));
+
+        let shared_files = outcome
+            .extracted_files
+            .iter()
+            .filter(|file| file.file_name == "shared_note.pdf")
+            .collect::<Vec<_>>();
+        assert_eq!(shared_files.len(), 2);
+        assert_ne!(shared_files[0].id, shared_files[1].id);
+        assert!(shared_files
+            .iter()
+            .all(|file| file.id.starts_with("payload-")));
+    }
+
+    #[test]
+    fn metadata_analyzer_does_not_scan_chunks_after_iend() {
+        let chunk_data = png_text_chunk_data(b"Comment", valid_pdf_payload());
+        let mut bytes = png_with_chunks(&[]);
+        bytes.extend_from_slice(&png_chunk(*b"tEXt", &chunk_data));
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn metadata_analyzer_ignores_non_png_media() {
         let media = LoadedMedia {
             source: MediaFileInfo::new(
@@ -2103,6 +2204,29 @@ mod tests {
             .extracted_payloads
             .iter()
             .any(|payload| payload.source == PayloadSource::SignatureScan));
+    }
+
+    #[test]
+    fn png_container_analyzer_rejects_invalid_packet_and_keeps_signature_fallback() {
+        let mut invalid_packet = stegascope_packet("corrupt_packet.pdf", valid_pdf_payload());
+        invalid_packet[18] ^= 0xFF;
+        let bytes = png_with_after_iend_payload(&invalid_packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.source == PayloadSource::SignatureScan
+                && payload.file.file_type == "application/pdf"
+                && payload.bytes == valid_pdf_payload()
+        }));
     }
 
     #[test]
@@ -2242,6 +2366,29 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_labels_post_eoi_data_as_after_eoi_not_segment() {
+        let post_eoi_segment = jpeg_segment_bytes(0xE1, valid_pdf_payload());
+        let bytes = jpeg_with_after_eoi_payload(&post_eoi_segment);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_after_eoi_payload_4.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_app")));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_extracts_valid_signature_from_app_segment() {
         let bytes = jpeg_with_segment_and_eoi(0xE1, valid_pdf_payload());
         let media = LoadedMedia {
@@ -2322,6 +2469,174 @@ mod tests {
 
         assert!(outcome.extracted_files.is_empty());
         assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_marker_shaped_sos_image_data() {
+        let marker_shaped_scan_data = jpeg_segment_bytes(0xE1, valid_pdf_payload());
+        let bytes = jpeg_with_sos_scan_data(&marker_shaped_scan_data);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_byte_stuffed_eoi_in_sos_scan_data() {
+        let scan_payload = b"%PDF-1.7\nscan data decoy\n%%EOF\n";
+        let after_eoi_payload = valid_pdf_payload();
+        let mut scan_data = b"scan data before byte-stuffed marker".to_vec();
+        scan_data.extend_from_slice(&[0xFF, 0x00, 0xD9]);
+        scan_data.extend_from_slice(scan_payload);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == scan_payload));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_restart_and_fill_markers_in_sos_scan_data() {
+        let scan_payload = b"%PDF-1.7\nrestart marker decoy\n%%EOF\n";
+        let after_eoi_payload = valid_pdf_payload();
+        let mut scan_data = b"scan data before restart marker".to_vec();
+        scan_data.extend_from_slice(&[0xFF, 0xFF, 0xD3]);
+        scan_data.extend_from_slice(&[0xFF, 0x01]);
+        scan_data.extend_from_slice(scan_payload);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == scan_payload));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_recovers_after_malformed_sos_marker_shaped_data() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"scan data before false marker");
+        bytes.extend_from_slice(&[0xFF, 0xE1, 0x00, 0x00]);
+        bytes.extend_from_slice(b"scan data after false marker");
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_after_eoi_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_app")));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_false_eoi_in_malformed_sos_marker_length() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"scan data before malformed marker");
+        bytes.extend_from_slice(&[0xFF, 0xE1, 0xFF, 0xD9]);
+        bytes.extend_from_slice(b"scan data after false eoi length bytes");
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_after_eoi_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_app")));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_skips_post_sos_segment_payload_when_finding_after_eoi() {
+        let post_scan_segment_payload = b"segment payload with false eoi \xFF\xD9";
+        let bytes = jpeg_with_post_sos_segment_and_after_eoi_payload(
+            0xE1,
+            post_scan_segment_payload,
+            valid_pdf_payload(),
+        );
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_after_eoi_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_app")));
     }
 
     #[test]
@@ -2610,6 +2925,23 @@ mod tests {
         bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
         bytes.extend_from_slice(scan_data);
         bytes.extend_from_slice(JPEG_EOI);
+        bytes
+    }
+
+    fn jpeg_with_post_sos_segment_and_after_eoi_payload(
+        marker: u8,
+        segment_payload: &[u8],
+        payload: &[u8],
+    ) -> Vec<u8> {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"first scan");
+        bytes.extend_from_slice(&jpeg_segment_bytes(marker, segment_payload));
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"second scan");
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(payload);
         bytes
     }
 

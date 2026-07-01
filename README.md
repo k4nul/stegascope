@@ -20,9 +20,11 @@ The repository is direction-pending. No public CI or release automation
 configuration is checked into the tree; validation is manual/local until a
 product direction is selected. Checked-in phase guidance lives in
 `docs/instructions/phase-gates.json` and is used by local maintainer tooling to
-route analyzer-expansion work, while private maintainer overlays, when present,
-stay ignored by Git. Documentation should describe the current implementation
-without locking in the MVP roadmap.
+route analyzer-expansion work. `docs/management/POLICY.json` is the only
+tracked management policy marker; private maintainer overlays, including
+`AGENTS.md`, `.codex/`, and generated `docs/management/` files, stay ignored by
+Git and are not part of the publishable handoff. Documentation should describe
+the current implementation without locking in the MVP roadmap.
 
 The active analyzer-expansion phase is `container-side-channels`, with
 `audio-lsb-analysis` listed as the next phase. Source and Rust tests for the WAV
@@ -48,8 +50,8 @@ Current implementation facts:
   inside the Tauri command layer before loader routing.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; command-level Rust tests cover create, attach,
-  analyze, list-extracted-files, and download flow; frontend UI/API flow tests
-  are still missing.
+  analyze, list-extracted-files, download flow, and same-name payload download
+  disambiguation; frontend UI/API flow tests are still missing.
 
 ## Documentation Map
 
@@ -76,7 +78,7 @@ Current implementation facts:
 Install dependencies:
 
 ```bash
-npm install
+npm ci
 ```
 
 Run the desktop app in development:
@@ -93,6 +95,7 @@ frontend at `http://localhost:1420`.
 Run the checks that match the scope of your change:
 
 ```bash
+npm run validate:static
 npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -106,14 +109,29 @@ npm run tauri -- build
 
 See [Testing](docs/testing.md) for when each command is appropriate.
 
-For documentation-only changes, use:
+For generic documentation-only changes, use:
 
 ```bash
 git diff --check
 ```
 
-This verifies patch formatting only; it does not satisfy the analyzer phase
-transition gate.
+When phase gate metadata changes, also parse it:
+
+```bash
+python3 -m json.tool docs/instructions/phase-gates.json
+```
+
+When phase handoff docs or local validator guidance changes, run:
+
+```bash
+npm run validate:static
+```
+
+These checks do not satisfy the analyzer phase transition gate.
+`validate:static` runs the validator syntax checks plus the dependency-free
+phase evidence validator, which includes the download IPC contract check.
+Run `validate:download-ipc` or `validate:phase-evidence` directly only when
+debugging those individual evidence checks.
 
 ## Project Layout
 
@@ -136,6 +154,7 @@ transition gate.
    local npm, DNS, or cache blockers first if needed.
 3. Split frontend analysis surfaces into feature modules once the workflow is
    accepted.
-4. Add negative-path command-level Rust tests and critical UI/API flow coverage.
+4. Add remaining negative-path attach/analyze Rust tests and critical UI/API flow
+   coverage.
 5. Regenerate the draw.io class diagram and exported images from current code,
    or remove the stale diagram artifacts.

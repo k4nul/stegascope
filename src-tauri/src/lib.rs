@@ -8,8 +8,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::{
-    create_loader, default_analyzers, finalize_extracted_payloads, ExtractedFile, MediaFileInfo,
-    SuspiciousLevel, Task,
+    create_loader, default_analyzers, ExtractedFile, MediaFileInfo, SuspiciousLevel, Task,
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -282,7 +281,7 @@ fn analyze_task_with_state(
     }
 
     task.clear_extracted_files();
-    task.replace_extracted_payloads(finalize_extracted_payloads(extracted_payloads));
+    task.replace_extracted_payloads(extracted_payloads);
     let extracted_files = task.extracted_files().to_vec();
 
     Ok(AnalysisResultResponse {
@@ -320,31 +319,23 @@ fn get_extracted_files_with_state(
 #[tauri::command]
 fn download_extracted_file(
     task_id: String,
-    file_name: String,
-    analyzer_name: String,
+    file_id: String,
     target_path: String,
     state: State<'_, AppState>,
 ) -> Result<DownloadExtractedFileResponse, String> {
-    download_extracted_file_with_state(
-        task_id,
-        file_name,
-        analyzer_name,
-        target_path,
-        state.inner(),
-    )
+    download_extracted_file_with_state(task_id, file_id, target_path, state.inner())
 }
 
 fn download_extracted_file_with_state(
     task_id: String,
-    file_name: String,
-    analyzer_name: String,
+    file_id: String,
     target_path: String,
     state: &AppState,
 ) -> Result<DownloadExtractedFileResponse, String> {
     validate_required(&task_id, "task id")?;
-    validate_required(&file_name, "file name")?;
-    validate_required(&analyzer_name, "analyzer name")?;
+    validate_required(&file_id, "file id")?;
     validate_required(&target_path, "save path")?;
+    let file_id = file_id.trim();
 
     let tasks = lock_tasks(&state)?;
     let task = tasks
@@ -353,13 +344,9 @@ fn download_extracted_file_with_state(
     let payload = task
         .extracted_payloads()
         .iter()
-        .find(|payload| {
-            payload.file.file_name == file_name && payload.file.analyzer_name == analyzer_name
-        })
+        .find(|payload| payload.file.id == file_id)
         .ok_or_else(|| {
-            format!(
-                "extracted file bytes not found in current analysis result: {file_name} from {analyzer_name}"
-            )
+            format!("extracted file bytes not found in current analysis result: {file_id}")
         })?;
     let saved_path = save_downloaded_payload(&target_path, &payload.bytes)?;
 
@@ -532,6 +519,7 @@ mod tests {
 
     use crate::domain::{ExtractedPayload, FileSignature, PayloadSource, ValidationStatus};
     use image::ImageEncoder;
+    use sha2::{Digest, Sha256};
     use std::path::Path;
 
     #[test]
@@ -756,6 +744,175 @@ mod tests {
     }
 
     #[test]
+    fn analyze_and_download_command_test_disambiguates_same_name_packet_payloads() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let first_payload = b"%PDF-1.7\nfirst command-level duplicate\n%%EOF\n";
+        let second_payload = b"%PDF-1.7\nsecond command-level duplicate\n%%EOF\n";
+        let first_packet = stegascope_packet("shared-command-note.pdf", first_payload);
+        let second_packet = stegascope_packet("shared-command-note.pdf", second_payload);
+        let carrier_bytes = png_with_text_chunks(&[
+            (b"Comment".as_slice(), first_packet.as_slice()),
+            (b"Comment".as_slice(), second_packet.as_slice()),
+        ]);
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "duplicate-packets.png".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: carrier_bytes,
+            },
+            &state,
+        )
+        .expect("media file should attach");
+
+        let result = analyze_task_with_state(task_id.clone(), &state)
+            .expect("duplicate packet analysis should run");
+        let stored_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("stored duplicate packet metadata should be readable");
+        let shared_files = stored_files
+            .iter()
+            .filter(|file| file.file_name == "shared-command-note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(result.extracted_files.len(), 2);
+        assert_eq!(result.extracted_files, stored_files);
+        assert_eq!(shared_files.len(), 2);
+        assert_ne!(shared_files[0].id, shared_files[1].id);
+        assert!(shared_files
+            .iter()
+            .all(|file| file.analyzer_name == "metadata-analyzer"));
+        assert!(shared_files
+            .iter()
+            .all(|file| file.validation_status == ValidationStatus::Verified));
+
+        let temp_dir = TempDir::new("downloads-analyzed-same-name-payloads");
+        let first_target = temp_dir.path().join("first.pdf");
+        let second_target = temp_dir.path().join("second.pdf");
+
+        download_extracted_file_with_state(
+            task_id.clone(),
+            shared_files[0].id.clone(),
+            first_target
+                .to_str()
+                .expect("first target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("first analyzed same-name payload should download");
+        download_extracted_file_with_state(
+            task_id,
+            shared_files[1].id.clone(),
+            second_target
+                .to_str()
+                .expect("second target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("second analyzed same-name payload should download");
+
+        let downloaded_payloads = [
+            fs::read(&first_target).expect("first analyzed payload should be readable"),
+            fs::read(&second_target).expect("second analyzed payload should be readable"),
+        ];
+
+        assert_ne!(downloaded_payloads[0], downloaded_payloads[1]);
+        assert!(downloaded_payloads.contains(&first_payload.to_vec()));
+        assert!(downloaded_payloads.contains(&second_payload.to_vec()));
+    }
+
+    #[test]
+    fn analyze_and_download_command_test_rejects_payload_id_after_reattach() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let first_payload = b"%PDF-1.7\nfirst reattached payload\n%%EOF\n";
+        let second_payload = b"%PDF-1.7\nsecond reattached payload\n%%EOF\n";
+        let first_packet = stegascope_packet("reattached-note.pdf", first_payload);
+        let second_packet = stegascope_packet("reattached-note.pdf", second_payload);
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "first-carrier.png".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: png_with_text_chunks(&[(b"Comment".as_slice(), first_packet.as_slice())]),
+            },
+            &state,
+        )
+        .expect("first media file should attach");
+        analyze_task_with_state(task_id.clone(), &state).expect("first analysis should run");
+        let stale_file_id = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("first analysis result should be readable")
+            .first()
+            .expect("first analysis should expose a payload")
+            .id
+            .clone();
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "second-carrier.png".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: png_with_text_chunks(&[(b"Comment".as_slice(), second_packet.as_slice())]),
+            },
+            &state,
+        )
+        .expect("second media file should attach");
+        assert!(get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("reattach should leave result metadata readable")
+            .is_empty());
+
+        analyze_task_with_state(task_id.clone(), &state).expect("second analysis should run");
+        let current_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("second analysis result should be readable");
+        assert_eq!(current_files.len(), 1);
+        assert_ne!(stale_file_id, current_files[0].id);
+
+        let temp_dir = TempDir::new("rejects-reattached-stale-payload-id");
+        let stale_target = temp_dir.path().join("stale.pdf");
+        let error = download_extracted_file_with_state(
+            task_id.clone(),
+            stale_file_id.clone(),
+            stale_target
+                .to_str()
+                .expect("stale target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("stale payload id should be rejected after reattach");
+        assert_eq!(
+            error,
+            format!("extracted file bytes not found in current analysis result: {stale_file_id}")
+        );
+        assert!(!stale_target.exists());
+
+        let current_target = temp_dir.path().join("current.pdf");
+        download_extracted_file_with_state(
+            task_id,
+            current_files[0].id.clone(),
+            current_target
+                .to_str()
+                .expect("current target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("current payload should download after reattach");
+
+        assert_eq!(
+            fs::read(&current_target).expect("current payload should be readable"),
+            second_payload.to_vec()
+        );
+    }
+
+    #[test]
     fn get_extracted_files_command_test_returns_current_result_metadata() {
         let state = AppState::default();
         let task =
@@ -777,7 +934,11 @@ mod tests {
         let stored_files = get_extracted_files_with_state(task.task_id, &state)
             .expect("stored extracted files should be readable");
 
-        assert_eq!(stored_files, vec![extracted_file]);
+        assert_eq!(stored_files.len(), 1);
+        assert_eq!(stored_files[0].file_name, extracted_file.file_name);
+        assert_eq!(stored_files[0].analyzer_name, extracted_file.analyzer_name);
+        assert_eq!(stored_files[0].file_type, extracted_file.file_type);
+        assert!(stored_files[0].id.starts_with("payload-"));
     }
 
     #[test]
@@ -800,12 +961,19 @@ mod tests {
             }]);
         }
 
+        let stored_files = get_extracted_files_with_state(task.task_id.clone(), &state)
+            .expect("stored extracted files should be readable");
+        let file_id = stored_files
+            .first()
+            .expect("stored payload should expose an id")
+            .id
+            .clone();
+
         let temp_dir = TempDir::new("downloads-current-payload");
         let target_path = temp_dir.path().join("exports").join("downloaded-note.pdf");
         let response = download_extracted_file_with_state(
             task.task_id,
-            "downloaded-note.pdf".to_string(),
-            "unit-test-analyzer".to_string(),
+            format!(" {file_id} "),
             target_path
                 .to_str()
                 .expect("target path should be utf-8")
@@ -824,6 +992,211 @@ mod tests {
     }
 
     #[test]
+    fn download_extracted_file_command_test_rejects_stale_payload_id_after_result_replacement() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let extracted_file = sample_extracted_file("rotating-note.pdf", "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![ExtractedPayload {
+                file: extracted_file.clone(),
+                bytes: b"previous analysis payload".to_vec(),
+                source: PayloadSource::VerifiedPacket,
+            }]);
+        }
+
+        let stale_file_id = get_extracted_files_with_state(task.task_id.clone(), &state)
+            .expect("previous extracted file should be readable")
+            .first()
+            .expect("previous payload should expose an id")
+            .id
+            .clone();
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![ExtractedPayload {
+                file: extracted_file,
+                bytes: b"current analysis payload".to_vec(),
+                source: PayloadSource::VerifiedPacket,
+            }]);
+        }
+
+        let current_file_id = get_extracted_files_with_state(task.task_id.clone(), &state)
+            .expect("current extracted file should be readable")
+            .first()
+            .expect("current payload should expose an id")
+            .id
+            .clone();
+        assert_ne!(stale_file_id, current_file_id);
+
+        let temp_dir = TempDir::new("rejects-stale-payload-id");
+        let target_path = temp_dir.path().join("stale.pdf");
+        let error = download_extracted_file_with_state(
+            task.task_id,
+            stale_file_id.clone(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("stale payload id should be rejected");
+
+        assert_eq!(
+            error,
+            format!("extracted file bytes not found in current analysis result: {stale_file_id}")
+        );
+        assert!(!target_path.exists());
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_uses_file_id_for_same_name_payloads() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let extracted_file = sample_extracted_file("shared-note.pdf", "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![
+                ExtractedPayload {
+                    file: extracted_file.clone(),
+                    bytes: b"first shared-name payload".to_vec(),
+                    source: PayloadSource::VerifiedPacket,
+                },
+                ExtractedPayload {
+                    file: extracted_file,
+                    bytes: b"second shared-name payload".to_vec(),
+                    source: PayloadSource::VerifiedPacket,
+                },
+            ]);
+        }
+
+        let stored_files = get_extracted_files_with_state(task.task_id.clone(), &state)
+            .expect("stored extracted files should be readable");
+
+        assert_eq!(stored_files.len(), 2);
+        assert_eq!(stored_files[0].file_name, "shared-note.pdf");
+        assert_eq!(stored_files[1].file_name, "shared-note.pdf");
+        assert_ne!(stored_files[0].id, stored_files[1].id);
+
+        let temp_dir = TempDir::new("downloads-same-name-payloads");
+        let first_target = temp_dir.path().join("first.pdf");
+        let second_target = temp_dir.path().join("second.pdf");
+
+        download_extracted_file_with_state(
+            task.task_id.clone(),
+            stored_files[0].id.clone(),
+            first_target
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("first same-name payload should download");
+        download_extracted_file_with_state(
+            task.task_id,
+            stored_files[1].id.clone(),
+            second_target
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("second same-name payload should download");
+
+        assert_eq!(
+            fs::read(&first_target).expect("first payload should be readable"),
+            b"first shared-name payload"
+        );
+        assert_eq!(
+            fs::read(&second_target).expect("second payload should be readable"),
+            b"second shared-name payload"
+        );
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_uses_file_id_for_same_name_signature_scan_payloads() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let extracted_file =
+            sample_extracted_file("shared-signature-note.pdf", "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(&state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(&task.task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![
+                ExtractedPayload {
+                    file: extracted_file.clone(),
+                    bytes: b"first shared-name signature payload".to_vec(),
+                    source: PayloadSource::SignatureScan,
+                },
+                ExtractedPayload {
+                    file: extracted_file,
+                    bytes: b"second shared-name signature payload".to_vec(),
+                    source: PayloadSource::SignatureScan,
+                },
+            ]);
+        }
+
+        let stored_files = get_extracted_files_with_state(task.task_id.clone(), &state)
+            .expect("stored extracted files should be readable");
+
+        assert_eq!(stored_files.len(), 2);
+        assert_eq!(stored_files[0].file_name, "shared-signature-note.pdf");
+        assert_eq!(stored_files[1].file_name, "shared-signature-note.pdf");
+        assert_ne!(stored_files[0].id, stored_files[1].id);
+
+        let temp_dir = TempDir::new("downloads-same-name-signature-payloads");
+        let first_target = temp_dir.path().join("first.bin");
+        let second_target = temp_dir.path().join("second.bin");
+
+        download_extracted_file_with_state(
+            task.task_id.clone(),
+            stored_files[0].id.clone(),
+            first_target
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("first same-name signature payload should download");
+        download_extracted_file_with_state(
+            task.task_id,
+            stored_files[1].id.clone(),
+            second_target
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("second same-name signature payload should download");
+
+        assert_eq!(
+            fs::read(&first_target).expect("first payload should be readable"),
+            b"first shared-name signature payload"
+        );
+        assert_eq!(
+            fs::read(&second_target).expect("second payload should be readable"),
+            b"second shared-name signature payload"
+        );
+    }
+
+    #[test]
     fn download_extracted_file_command_test_rejects_missing_payload_bytes() {
         let state = AppState::default();
         let task =
@@ -833,8 +1206,7 @@ mod tests {
 
         let error = download_extracted_file_with_state(
             task.task_id,
-            "missing.bin".to_string(),
-            "unit-test-analyzer".to_string(),
+            "missing-payload-id".to_string(),
             target_path
                 .to_str()
                 .expect("target path should be utf-8")
@@ -845,8 +1217,31 @@ mod tests {
 
         assert_eq!(
             error,
-            "extracted file bytes not found in current analysis result: missing.bin from unit-test-analyzer"
+            "extracted file bytes not found in current analysis result: missing-payload-id"
         );
+        assert!(!target_path.exists());
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_rejects_blank_payload_id() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let temp_dir = TempDir::new("rejects-blank-payload-id");
+        let target_path = temp_dir.path().join("blank.bin");
+
+        let error = download_extracted_file_with_state(
+            task.task_id,
+            "   ".to_string(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("blank payload id should be rejected");
+
+        assert_eq!(error, "file id is required");
         assert!(!target_path.exists());
     }
 
@@ -866,6 +1261,65 @@ mod tests {
             .write_image(&pixels, 1, 1, image::ExtendedColorType::Rgba8)
             .expect("test PNG should encode");
         bytes
+    }
+
+    fn png_with_text_chunks(chunks: &[(&[u8], &[u8])]) -> Vec<u8> {
+        let mut bytes = png_image_bytes();
+        let mut inserted_chunks = Vec::new();
+
+        for (keyword, payload) in chunks {
+            let mut chunk_data = Vec::new();
+            chunk_data.extend_from_slice(keyword);
+            chunk_data.push(0);
+            chunk_data.extend_from_slice(payload);
+            inserted_chunks.extend_from_slice(&png_chunk(*b"tEXt", &chunk_data));
+        }
+
+        let iend_type_offset = bytes
+            .windows(4)
+            .position(|window| window == b"IEND")
+            .expect("encoded PNG should contain IEND chunk");
+        let iend_chunk_offset = iend_type_offset - 4;
+        bytes.splice(iend_chunk_offset..iend_chunk_offset, inserted_chunks);
+
+        bytes
+    }
+
+    fn png_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
+        let mut chunk = Vec::new();
+        chunk.extend_from_slice(&(data.len() as u32).to_be_bytes());
+        chunk.extend_from_slice(&kind);
+        chunk.extend_from_slice(data);
+        chunk.extend_from_slice(&png_crc32(&kind, data).to_be_bytes());
+        chunk
+    }
+
+    fn png_crc32(kind: &[u8; 4], data: &[u8]) -> u32 {
+        let mut crc = 0xFFFF_FFFF_u32;
+
+        for byte in kind.iter().chain(data.iter()) {
+            crc ^= *byte as u32;
+            for _ in 0..8 {
+                let mask = 0_u32.wrapping_sub(crc & 1);
+                crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+            }
+        }
+
+        !crc
+    }
+
+    fn stegascope_packet(file_name: &str, payload: &[u8]) -> Vec<u8> {
+        const STEGASCOPE_PACKET_MAGIC: &[u8; 8] = b"SS2X3ME1";
+
+        let name_bytes = file_name.as_bytes();
+        let mut packet = Vec::new();
+        packet.extend_from_slice(STEGASCOPE_PACKET_MAGIC);
+        packet.extend_from_slice(&(name_bytes.len() as u16).to_be_bytes());
+        packet.extend_from_slice(&(payload.len() as u64).to_be_bytes());
+        packet.extend_from_slice(&Sha256::digest(payload));
+        packet.extend_from_slice(name_bytes);
+        packet.extend_from_slice(payload);
+        packet
     }
 
     fn sample_extracted_file(file_name: &str, analyzer_name: &str) -> ExtractedFile {
@@ -895,6 +1349,7 @@ mod tests {
                 "stegascope-{test_name}-{}-{unique_id}",
                 std::process::id()
             ));
+            fs::create_dir_all(&path).expect("temporary test directory should be created");
 
             Self { path }
         }

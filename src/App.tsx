@@ -313,8 +313,7 @@ function App() {
 
       const downloaded = await downloadExtractedFile(
         activeTab.taskId,
-        file.fileName,
-        file.analyzerName,
+        file.id,
         targetPath,
       );
       patchTab(activeTab.id, {
@@ -571,7 +570,7 @@ function App() {
                     {activeTab.extractedFiles.length > 0 ? (
                       <ul>
                         {activeTab.extractedFiles.map((file) => (
-                          <li key={`${file.analyzerName}-${file.fileName}-${file.fileType}`}>
+                          <li key={file.id}>
                             <span className="file-primary">
                               <strong>{file.fileName}</strong>
                               <small>{file.fileType}</small>
