@@ -2470,6 +2470,48 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_extracts_multiple_packet_payloads_after_eoi() {
+        let first_secret: &[u8] = b"%PDF-1.7\nfirst after-EOI packet\n%%EOF\n";
+        let second_secret: &[u8] = b"%PDF-1.7\nsecond after-EOI packet\n%%EOF\n";
+        let first_packet = stegascope_packet("first_after_eoi_note.pdf", first_secret);
+        let second_packet = stegascope_packet("second_after_eoi_note.pdf", second_secret);
+        let mut after_eoi = Vec::new();
+        after_eoi.extend_from_slice(&first_packet);
+        after_eoi.extend_from_slice(&second_packet);
+        let bytes = jpeg_with_after_eoi_payload(&after_eoi);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 2);
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.file.validation_status == ValidationStatus::Verified));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "first_after_eoi_note.pdf" && payload.bytes == first_secret
+        }));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "second_after_eoi_note.pdf" && payload.bytes == second_secret
+        }));
+        assert_ne!(
+            outcome.extracted_payloads[0].file.id,
+            outcome.extracted_payloads[1].file.id
+        );
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_labels_post_eoi_data_as_after_eoi_not_segment() {
         let post_eoi_segment = jpeg_segment_bytes(0xE1, valid_pdf_payload());
         let bytes = jpeg_with_after_eoi_payload(&post_eoi_segment);
@@ -2537,6 +2579,36 @@ mod tests {
         assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
         assert_eq!(payload.source, PayloadSource::VerifiedPacket);
         assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_prefers_verified_segment_packet_over_after_eoi_signature_candidates() {
+        let secret: &[u8] = b"verified segment packet without a known file signature";
+        let packet = stegascope_packet("segment_packet", secret);
+        let bytes = jpeg_with_comment_segment_and_after_eoi_payload(&packet, valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "segment_packet")
+            .expect("expected verified JPEG COM packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.source, PayloadSource::VerifiedPacket);
+        assert_eq!(payload.bytes, secret);
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_after_eoi_payload_")));
     }
 
     #[test]

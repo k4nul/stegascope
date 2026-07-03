@@ -48,8 +48,9 @@ extraction behavior, including:
   scan-data isolation, marker-shaped scan-data isolation, byte-stuffed SOS EOI
   isolation, SOS restart/fill marker isolation, malformed SOS marker recovery,
   malformed SOS false-EOI length recovery, post-SOS marker-segment skipping,
-  and after-EOI evidence labeling, including same-name packet preservation
-  across segment and after-EOI channels.
+  and after-EOI evidence labeling, including multiple verified packets after
+  EOI, same-name packet preservation across segment and after-EOI channels, and
+  verified packet preference over after-EOI signature fallback candidates.
 - Container side-channel boundaries, including metadata chunks after structural
   PNG `IEND`, invalid or missing PNG `IEND` terminators, JPEG marker-like bytes
   after structural EOI, and same-name distinct payload preservation.
