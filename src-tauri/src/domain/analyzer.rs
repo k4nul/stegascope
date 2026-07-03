@@ -817,6 +817,10 @@ fn extract_jpeg_segment_payloads(
         return Vec::new();
     }
 
+    if structural_jpeg_eoi_end(&media.bytes).is_none() {
+        return Vec::new();
+    }
+
     let mut verified_payloads = Vec::new();
     let mut fallback_payloads = Vec::new();
 
@@ -2596,6 +2600,22 @@ mod tests {
         assert!(payloads
             .iter()
             .any(|payload| payload.bytes == second_secret));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("truncated.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
     }
 
     #[test]

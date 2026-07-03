@@ -102,8 +102,9 @@ structural `IEND` chunk. Payload-like bytes in malformed or truncated PNG chunks
 are ignored.
 
 For JPEG segment analysis, candidates are limited to valid COM/APP segment data
-or bytes appended after the structural EOI marker. Payload-like bytes inside
-scan image data, malformed segments, or non-JPEG bytes are ignored.
+in carriers with a structural EOI marker, or bytes appended after that marker.
+Payload-like bytes inside scan image data, malformed segments, incomplete
+carriers, or non-JPEG bytes are ignored.
 
 For WAV audio carriers, uncompressed PCM `fmt ` and `data` chunks are scanned
 for sample LSB payload streams. Unsupported WAV encodings, malformed WAV chunks,
