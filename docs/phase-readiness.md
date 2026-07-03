@@ -18,8 +18,10 @@ The current phase covers the first image-container analyzer package:
 
 - JPEG COM/APP0-APP15 segment payload scanning.
 - JPEG payload bytes appended after the structural EOI marker.
-- PNG compressed `zTXt` and `iTXt` text payload scanning.
-- PNG payload bytes appended after the structural `IEND` chunk.
+- PNG compressed `zTXt` and `iTXt` text payload scanning after a valid
+  structural `IEND` terminator is present.
+- PNG payload bytes appended after the structural `IEND` chunk, with invalid
+  `IEND` CRCs rejected as malformed boundaries.
 - Current-analysis download selection using deterministic payload IDs for
   same-name recovered byte streams emitted by the current analyzers.
 
@@ -71,7 +73,7 @@ Use these checked-in source locations when reviewing the phase:
 | --- | --- |
 | JPEG segment analyzer exists | `src-tauri/src/domain/analyzer.rs` defines `JpegSegmentAnalyzer` and `extract_jpeg_segment_payloads`; `src-tauri/src/domain/analyzer_pipeline.rs` registers `JpegSegmentAnalyzer`. |
 | PNG deep container scan exists | `src-tauri/src/domain/analyzer.rs` defines `PngContainerAnalyzer`, `extract_png_container_payloads`, `png_metadata_payload_views`, `decoded_ztxt_text`, `itxt_text_payload`, and `png_after_iend_payload`; `src-tauri/src/domain/analyzer_pipeline.rs` registers `PngContainerAnalyzer`. |
-| Analyzer package tests exist | `src-tauri/src/domain/analyzer.rs` includes PNG compressed text, same-name packet preservation, default-pipeline container-side-channel packet extraction, after-IEND, JPEG COM/APP, corrupt packet magic decoy recovery, APP0/APP15 boundary segment, non-payload marker segment exclusion, after-EOI, structural EOI requirement before JPEG segment payload extraction, scan-data isolation, marker-shaped scan-data isolation, byte-stuffed SOS EOI isolation, SOS restart/fill marker isolation, malformed SOS marker recovery, malformed SOS false-EOI length recovery, post-SOS marker-segment skipping, same-name segment/after-EOI preservation, malformed-segment, and non-JPEG/truncated input safety tests. |
+| Analyzer package tests exist | `src-tauri/src/domain/analyzer.rs` includes PNG compressed text, same-name packet preservation, default-pipeline container-side-channel packet extraction, missing or invalid structural IEND rejection, after-IEND, JPEG COM/APP, corrupt packet magic decoy recovery, APP0/APP15 boundary segment, non-payload marker segment exclusion, after-EOI, structural EOI requirement before JPEG segment payload extraction, scan-data isolation, marker-shaped scan-data isolation, byte-stuffed SOS EOI isolation, SOS restart/fill marker isolation, malformed SOS marker recovery, malformed SOS false-EOI length recovery, post-SOS marker-segment skipping, same-name segment/after-EOI preservation, malformed-segment, and non-JPEG/truncated input safety tests. |
 | Local-file boundary evidence exists | `src/App.tsx` and `src/api/analysis.ts` send selected media paths through `attach_media_file_from_path`; `src-tauri/src/lib.rs` reads bytes inside Rust and includes `attach_media_file_from_path_command_test_reads_local_media_path`. |
 | Payload ID download disambiguation exists | `src-tauri/src/domain/analyzer_pipeline.rs` assigns deterministic payload IDs from analyzer name, embedded file name, file type, payload source, and recovered bytes; `src-tauri/src/domain/task.rs` stores payload bytes with metadata; `src-tauri/src/lib.rs` resolves payload IDs against the current analysis result before downloading, including same-name JPEG segment and after-EOI payload command tests; `src/App.tsx` and `src/api/analysis.ts` pass `file.id` through the frontend IPC wrapper. |
 | WAV PCM LSB pre-transition evidence exists | `docs/instructions/phase-gates.json` declares `wav-pcm-lsb-pretransition-evidence` as informational; `src-tauri/src/domain/analyzer.rs` defines `WavPcmLsbAnalyzer`, `wav_pcm_data`, `extract_wav_pcm_lsb_bits`, and focused WAV tests; `src-tauri/src/domain/analyzer_pipeline.rs` registers `WavPcmLsbAnalyzer`. |

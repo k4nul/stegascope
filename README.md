@@ -37,11 +37,12 @@ Current implementation facts:
 
 - Frontend: React 19, TypeScript 5, and Vite.
 - Desktop shell: Tauri 2 with Rust command handlers.
-- Analyzer coverage: PNG metadata and ancillary text chunks, including
-  compressed `zTXt`/`iTXt` text payloads, PNG after-IEND container payload data,
-  embedded file signatures, JPEG COM/APP segment and after-EOI payload data, RGB
-  LSB streams, two-bit-per-pixel LSB strategies, WAV PCM sample LSB streams,
-  and verified StegaScope packets.
+- Analyzer coverage: PNG metadata and ancillary text chunks after a valid
+  structural `IEND` boundary is confirmed, including compressed `zTXt`/`iTXt`
+  text payloads, PNG after-IEND container payload data, embedded file
+  signatures, JPEG COM/APP segment and after-EOI payload data, RGB LSB streams,
+  two-bit-per-pixel LSB strategies, WAV PCM sample LSB streams, and verified
+  StegaScope packets.
 - Audio and video files can be attached through MIME-prefix loaders. WAV files
   with uncompressed PCM sample data are analyzed for sample LSB payloads; other
   non-image carriers still rely on byte-oriented signature scanning until later

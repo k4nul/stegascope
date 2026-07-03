@@ -97,9 +97,11 @@ For image LSB analysis, the media must decode successfully as an image. The
 image-only LSB analyzers return no candidates for non-image media, while
 uncompressed PCM WAV carriers can be scanned by the audio-specific LSB analyzer.
 
-For PNG container analysis, candidates are limited to bytes appended after the
-structural `IEND` chunk. Payload-like bytes in malformed or truncated PNG chunks
-are ignored.
+For PNG container analysis, candidates are limited to bytes appended after a
+valid structural `IEND` chunk. PNG metadata scanning also requires that
+terminator before it reports metadata payloads. Payload-like bytes in malformed
+or truncated PNG chunks, or after an `IEND` chunk with an invalid CRC, are
+ignored.
 
 For JPEG segment analysis, candidates are limited to valid COM/APP segment data
 in carriers with a structural EOI marker, or bytes appended after that marker.

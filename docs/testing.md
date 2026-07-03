@@ -34,10 +34,11 @@ extraction behavior, including:
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
 - PNG metadata boundary handling that ignores chunks after the structural
-  `IEND` marker.
+  `IEND` marker and refuses metadata extraction before a valid structural
+  `IEND` terminator is present.
 - Compressed PNG `zTXt`/`iTXt` metadata payload extraction.
 - PNG after-IEND packet and signature candidate extraction, including invalid
-  packet fallback to signature evidence.
+  packet fallback to signature evidence and invalid `IEND` CRC rejection.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   invalid signature decoy recovery, non-payload marker segment exclusion,
@@ -49,8 +50,8 @@ extraction behavior, including:
   evidence labeling, including same-name packet preservation across segment and
   after-EOI channels.
 - Container side-channel boundaries, including metadata chunks after structural
-  PNG `IEND`, JPEG marker-like bytes after structural EOI, and same-name
-  distinct payload preservation.
+  PNG `IEND`, invalid or missing PNG `IEND` terminators, JPEG marker-like bytes
+  after structural EOI, and same-name distinct payload preservation.
 - WAV PCM sample LSB packet and signature extraction, plus unsupported or
   truncated WAV safety.
 - Two-bit-per-pixel channel and matrix strategies.

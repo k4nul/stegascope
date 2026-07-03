@@ -754,6 +754,10 @@ fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<Ex
         return Vec::new();
     }
 
+    if structural_png_iend_end(&media.bytes).is_none() {
+        return Vec::new();
+    }
+
     let mut verified_payloads = Vec::new();
     let mut fallback_payloads = Vec::new();
 
@@ -1178,11 +1182,39 @@ fn structural_png_iend_end(bytes: &[u8]) -> Option<usize> {
 
         let kind = &bytes[length_end..kind_end];
         if kind == b"IEND" {
-            return (length == 0).then_some(next_offset);
+            let crc_matches = png_chunk_crc_matches(
+                kind,
+                &bytes[data_start..data_end],
+                &bytes[data_end..next_offset],
+            );
+            return (length == 0 && crc_matches).then_some(next_offset);
         }
 
         offset = next_offset;
     }
+}
+
+fn png_chunk_crc_matches(kind: &[u8], data: &[u8], crc_bytes: &[u8]) -> bool {
+    if crc_bytes.len() != 4 {
+        return false;
+    }
+
+    let expected = u32::from_be_bytes([crc_bytes[0], crc_bytes[1], crc_bytes[2], crc_bytes[3]]);
+    png_chunk_crc32(kind, data) == expected
+}
+
+fn png_chunk_crc32(kind: &[u8], data: &[u8]) -> u32 {
+    let mut crc = 0xFFFF_FFFF_u32;
+
+    for byte in kind.iter().chain(data.iter()) {
+        crc ^= *byte as u32;
+        for _ in 0..8 {
+            let mask = 0_u32.wrapping_sub(crc & 1);
+            crc = (crc >> 1) ^ (0xEDB8_8320 & mask);
+        }
+    }
+
+    !crc
 }
 
 fn is_png_metadata_chunk(kind: &[u8]) -> bool {
@@ -2049,6 +2081,23 @@ mod tests {
     }
 
     #[test]
+    fn metadata_analyzer_requires_structural_iend_before_scanning_metadata_chunks() {
+        let chunk_data = png_text_chunk_data(b"Comment", valid_pdf_payload());
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(PNG_SIGNATURE);
+        bytes.extend_from_slice(&png_chunk(*b"tEXt", &chunk_data));
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("truncated.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = MetadataAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn metadata_analyzer_prefers_verified_packet_over_signature_candidates_across_png_chunks() {
         let signature_chunk = png_text_chunk_data(b"Comment", valid_pdf_payload());
         let secret = b"\x89PNG\r\n\x1A\nverified-metadata-payload";
@@ -2291,6 +2340,21 @@ mod tests {
         bytes.extend_from_slice(b"Comment\0%PDF");
         let media = LoadedMedia {
             source: MediaFileInfo::new("truncated.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn png_container_analyzer_rejects_after_iend_payload_when_iend_crc_is_invalid() {
+        let mut bytes = png_with_after_iend_payload(valid_pdf_payload());
+        corrupt_first_iend_crc(&mut bytes);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
             bytes,
         };
 
@@ -3465,6 +3529,15 @@ mod tests {
         let mut bytes = png_with_chunks(&[]);
         bytes.extend_from_slice(payload);
         bytes
+    }
+
+    fn corrupt_first_iend_crc(bytes: &mut [u8]) {
+        let iend_type_offset = bytes
+            .windows(4)
+            .position(|window| window == b"IEND")
+            .expect("test PNG should contain IEND chunk");
+        let iend_crc_offset = iend_type_offset + b"IEND".len();
+        bytes[iend_crc_offset] ^= 0xFF;
     }
 
     fn png_chunk(kind: [u8; 4], data: &[u8]) -> Vec<u8> {
