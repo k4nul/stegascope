@@ -475,7 +475,7 @@ expectMatch(
 expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /`npm run validate:static` \(80 download IPC checks and 215 phase\s+evidence checks\)/,
+  /`npm run validate:static` \(80 download IPC checks and 221 phase\s+evidence checks\)/,
 );
 expectMatch(
   "phase readiness records latest uncached npm blocker",

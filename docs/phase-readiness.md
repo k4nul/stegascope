@@ -526,6 +526,13 @@ Current automation context for this documentation handoff:
   temporary cache. `cargo test --manifest-path src-tauri/Cargo.toml --no-run`
   failed before project code because Cargo could not resolve
   `index.crates.io` while fetching the `image` crate.
+- July 3, 2026 KST validation-chain drift repair refreshed the dependency-free
+  phase evidence snapshot without changing phase state. Static validation
+  passed with `npm run validate:static` (80 download IPC checks and 221 phase
+  evidence checks), `cargo metadata --manifest-path src-tauri/Cargo.toml --locked --offline --no-deps --format-version=1`,
+  and `git diff --check`. Runtime transition validation still requires local
+  Node dependencies before `npm run build` can run the checked-in TypeScript and
+  Vite toolchain.
 
 The next valid phase-transition attempt should begin with successful dependency
 setup and a fresh `npm run build` result.
