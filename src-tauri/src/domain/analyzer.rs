@@ -2410,6 +2410,49 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_scans_app0_and_app15_boundary_segments() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xE0, valid_pdf_payload()));
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xEF, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 2);
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_app0_segment_1_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::High
+                && file.validation_status == ValidationStatus::Validated
+        }));
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_app15_segment_2_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::High
+                && file.validation_status == ValidationStatus::Validated
+        }));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_non_payload_marker_segments() {
+        let bytes = jpeg_with_segment_and_eoi(0xDB, valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload() {
         let bytes = jpeg_with_comment_segment_and_after_eoi_payload(
             b"segment-note\xFF\xD9inside-comment",
@@ -2647,6 +2690,28 @@ mod tests {
         ];
 
         for bytes in malformed_inputs {
+            let media = LoadedMedia {
+                source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+                bytes,
+            };
+
+            let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+            assert!(outcome.extracted_files.is_empty());
+            assert!(outcome.extracted_payloads.is_empty());
+        }
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_returns_empty_for_non_jpeg_and_truncated_inputs() {
+        let empty_inputs = [
+            valid_pdf_payload().to_vec(),
+            vec![0xFF, 0xD8],
+            vec![0xFF, 0xD8, 0xFF],
+            vec![0xFF, 0xD8, 0xFF, 0xFE, 0x00],
+        ];
+
+        for bytes in empty_inputs {
             let media = LoadedMedia {
                 source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
                 bytes,

@@ -274,6 +274,8 @@ for (const evidence of [
   "jpeg_segment_analyzer_extracts_valid_signature_after_eoi",
   "jpeg_segment_analyzer_labels_post_eoi_data_as_after_eoi_not_segment",
   "jpeg_segment_analyzer_extracts_valid_signature_from_app_segment",
+  "jpeg_segment_analyzer_scans_app0_and_app15_boundary_segments",
+  "jpeg_segment_analyzer_ignores_non_payload_marker_segments",
   "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",
   "jpeg_segment_analyzer_does_not_treat_comment_data_after_false_eoi_as_trailing_payload",
   "jpeg_segment_analyzer_does_not_scan_sos_image_data_as_segment_payload",
@@ -284,6 +286,7 @@ for (const evidence of [
   "jpeg_segment_analyzer_ignores_false_eoi_in_malformed_sos_marker_length",
   "jpeg_segment_analyzer_skips_post_sos_segment_payload_when_finding_after_eoi",
   "jpeg_segment_analyzer_handles_malformed_segment_lengths",
+  "jpeg_segment_analyzer_returns_empty_for_non_jpeg_and_truncated_inputs",
 ]) {
   expectGateEvidence("rust-analyzer-tests-exist", evidence);
   expectRustTestFunction(
