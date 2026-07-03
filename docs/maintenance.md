@@ -92,12 +92,12 @@ Document any skipped validation with the exact blocker.
   path-based attach command. Phase state must still wait for a passing
   transition validation run. Do not change phase state with documentation-only
   updates.
-- Command-level Rust coverage is partial; create, attach, analyze,
-  list-extracted-files, download flow, and stale payload-ID rejection after
-  reattach/reanalysis have initial tests. Attach/analyze negative paths now
-  cover invalid byte input, invalid path input, missing tasks, and missing media,
-  while malformed download requests and broader cross-command state transitions
-  still need coverage.
+- Command-level Rust coverage is partial; create, attach, path-based reattach
+  result clearing, analyze, list-extracted-files, download flow, and stale
+  payload-ID rejection after reattach/reanalysis have initial tests.
+  Attach/analyze negative paths now cover invalid byte input, invalid path input,
+  missing tasks, and missing media, while broader cross-command state
+  transitions still need coverage.
 - Frontend UI/API flow tests are missing.
 - Large media handling now uses a path-based frontend attach flow. A later
   cleanup can remove the legacy byte-input attach command after compatibility

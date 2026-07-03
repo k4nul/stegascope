@@ -832,6 +832,75 @@ mod tests {
     }
 
     #[test]
+    fn attach_media_file_from_path_command_test_clears_current_result_on_reattach() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let temp_dir = TempDir::new("path-media-reattach-clears-result");
+        let first_payload = b"%PDF-1.7\npath reattach stale payload\n%%EOF\n";
+        let first_packet = stegascope_packet("path-reattach-note.pdf", first_payload);
+        let first_media_path = temp_dir.path().join("first-carrier.png");
+        let second_media_path = temp_dir.path().join("second-carrier.png");
+
+        fs::write(
+            &first_media_path,
+            png_with_text_chunks(&[(b"Comment".as_slice(), first_packet.as_slice())]),
+        )
+        .expect("first media fixture should be written");
+        fs::write(&second_media_path, png_image_bytes())
+            .expect("second media fixture should be written");
+
+        attach_media_file_from_path_with_state(
+            task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: first_media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect("first path media file should attach");
+        analyze_task_with_state(task_id.clone(), &state).expect("first analysis should run");
+        let stale_file_id = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("first analysis result should be readable")
+            .first()
+            .expect("first analysis should expose a payload")
+            .id
+            .clone();
+
+        attach_media_file_from_path_with_state(
+            task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: second_media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect("second path media file should attach");
+        assert!(get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("path reattach should leave result metadata readable")
+            .is_empty());
+
+        let stale_target = temp_dir.path().join("stale.pdf");
+        let error = download_extracted_file_with_state(
+            task_id,
+            stale_file_id.clone(),
+            stale_target
+                .to_str()
+                .expect("stale target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("stale path-reattach payload id should be rejected");
+
+        assert_eq!(
+            error,
+            format!("extracted file bytes not found in current analysis result: {stale_file_id}")
+        );
+        assert!(!stale_target.exists());
+    }
+
+    #[test]
     fn analyze_task_command_test_runs_default_analyzers_and_stores_result() {
         let state = AppState::default();
         let task =
@@ -1240,6 +1309,19 @@ mod tests {
         assert_eq!(stored_files[0].analyzer_name, extracted_file.analyzer_name);
         assert_eq!(stored_files[0].file_type, extracted_file.file_type);
         assert!(stored_files[0].id.starts_with("payload-"));
+    }
+
+    #[test]
+    fn get_extracted_files_command_test_rejects_blank_or_missing_task() {
+        let state = AppState::default();
+
+        let blank_task_id_error = get_extracted_files_with_state("   ".to_string(), &state)
+            .expect_err("blank task id should be rejected");
+        assert_eq!(blank_task_id_error, "task id is required");
+
+        let missing_task_error = get_extracted_files_with_state("task-missing".to_string(), &state)
+            .expect_err("missing task should be rejected");
+        assert_eq!(missing_task_error, "task not found: task-missing");
     }
 
     #[test]

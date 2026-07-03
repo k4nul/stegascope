@@ -58,7 +58,8 @@ extraction behavior, including:
 - Invalid MP3 candidate rejection.
 
 There are initial command-level Rust tests for create, byte-input attach,
-path-based attach, invalid attach/analyze inputs, analyze, list-extracted-files,
+path-based attach, invalid attach/analyze inputs, path-based reattach result
+clearing, analyze, list-extracted-files success and missing-task rejection,
 download command flow, malformed download request rejection, and same-name
 payload download disambiguation for PNG metadata and JPEG segment carriers.
 There are no frontend tests, negative-path command-level Rust tests for every
@@ -204,8 +205,8 @@ npm run tauri -- build
 
 Add these before treating the app as a stable MVP:
 
-- Broaden command-level tests for cross-command state transitions outside the
-  current download path.
+- Broaden remaining command-level tests for cross-command state transitions
+  outside the current attach/analyze/download path.
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Broader test fixtures for supported media classes and known payload examples.
