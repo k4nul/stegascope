@@ -1045,7 +1045,7 @@ fn skip_malformed_jpeg_segment_length(bytes: &[u8], length_offset: usize) -> usi
 }
 
 fn jpeg_marker_has_no_payload(marker: u8) -> bool {
-    marker == 0x01 || (0xD0..=0xD8).contains(&marker)
+    marker == 0x01 || (0xD0..=0xD7).contains(&marker)
 }
 
 fn is_jpeg_payload_segment(marker: u8) -> bool {
@@ -3102,6 +3102,39 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_ignores_false_eoi_after_scan_soi_decoy() {
+        let decoy_payload = b"%PDF-1.7\nnested SOI scan decoy\n%%EOF\n";
+        let after_eoi_payload = b"%PDF-1.7\nactual after-EOI payload\n%%EOF\n";
+        let mut scan_data = b"scan data before nested SOI marker".to_vec();
+        scan_data.extend_from_slice(JPEG_SOI);
+        scan_data.extend_from_slice(JPEG_EOI);
+        scan_data.extend_from_slice(decoy_payload);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected actual after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == decoy_payload));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_skips_post_sos_segment_payload_when_finding_after_eoi() {
         let post_scan_segment_payload = b"segment payload with false eoi \xFF\xD9";
         let bytes = jpeg_with_post_sos_segment_and_after_eoi_payload(
@@ -3127,6 +3160,25 @@ mod tests {
             .extracted_files
             .iter()
             .any(|file| file.file_name.starts_with("jpeg_app")));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_nested_soi_marker_before_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
     }
 
     #[test]
