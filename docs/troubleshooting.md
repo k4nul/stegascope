@@ -45,6 +45,18 @@ fresh `npm run build` result is available.
 If `npm ci` cannot resolve `registry.npmjs.org`, fix network or DNS access and
 rerun setup before treating the frontend build as a project failure.
 
+To classify local setup before rerunning the full transition checks:
+
+```bash
+npm run validate:toolchain-readiness
+```
+
+`npm run validate:toolchain-readiness` checks the local `tsc` and `vite`
+binaries used by `npm run build`, confirms the checked-in lockfiles still exist,
+and runs offline Cargo metadata resolution. A blocker from this preflight means
+the local toolchain or dependency cache is not ready; it is not phase-transition
+evidence and should not change phase state.
+
 In sandboxed automation runs, npm may also need a writable cache outside the
 home directory. Use a temporary cache for setup validation when the default
 `~/.npm` path is not writable:

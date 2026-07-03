@@ -10,7 +10,8 @@
     "build": "tsc && vite build",
     "validate:download-ipc": "node scripts/validate-download-ipc.mjs",
     "validate:phase-evidence": "node scripts/validate-phase-evidence.mjs",
-    "validate:static": "node --check scripts/validate-download-ipc.mjs && node --check scripts/validate-phase-evidence.mjs && node scripts/validate-phase-evidence.mjs",
+    "validate:toolchain-readiness": "node scripts/validate-toolchain-readiness.mjs",
+    "validate:static": "node --check scripts/validate-download-ipc.mjs && node --check scripts/validate-phase-evidence.mjs && node --check scripts/validate-toolchain-readiness.mjs && node scripts/validate-phase-evidence.mjs",
     "preview": "vite preview",
     "tauri": "tauri"
   },

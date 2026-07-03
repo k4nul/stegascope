@@ -11,6 +11,7 @@ const readProjectFile = (path) =>
 const checks = [];
 const allowedDependencyFreeImports = new Set([
   "./validate-download-ipc.mjs",
+  "node:child_process",
   "node:fs",
   "node:path",
   "node:url",
@@ -103,6 +104,7 @@ const phaseById = new Map(
 );
 
 validateDependencyFreeImports("scripts/validate-phase-evidence.mjs");
+validateDependencyFreeImports("scripts/validate-toolchain-readiness.mjs");
 
 expectCondition(
   "package build script keeps TypeScript and Vite gate",
@@ -127,9 +129,14 @@ expectCondition(
     "node scripts/validate-phase-evidence.mjs",
 );
 expectCondition(
+  "package exposes toolchain readiness validator",
+  packageManifest.scripts?.["validate:toolchain-readiness"] ===
+    "node scripts/validate-toolchain-readiness.mjs",
+);
+expectCondition(
   "package exposes dependency-free static validator chain",
   packageManifest.scripts?.["validate:static"] ===
-    "node --check scripts/validate-download-ipc.mjs && node --check scripts/validate-phase-evidence.mjs && node scripts/validate-phase-evidence.mjs",
+    "node --check scripts/validate-download-ipc.mjs && node --check scripts/validate-phase-evidence.mjs && node --check scripts/validate-toolchain-readiness.mjs && node scripts/validate-phase-evidence.mjs",
 );
 expectCondition(
   "phase manifest stays on container-side-channels",
@@ -424,6 +431,11 @@ expectMatch(
   /npm run validate:static/,
 );
 expectMatch(
+  "testing docs list toolchain readiness preflight",
+  testingDocs,
+  /npm run validate:toolchain-readiness/,
+);
+expectMatch(
   "testing docs describe informational WAV pre-transition evidence",
   testingDocs,
   /informational WAV pre-transition evidence/,
@@ -454,6 +466,11 @@ expectMatch(
   /fresh `npm run build` transition validation passes/,
 );
 expectMatch(
+  "README lists toolchain readiness preflight",
+  readmeDocs,
+  /npm run validate:toolchain-readiness/,
+);
+expectMatch(
   "phase readiness declares current phase",
   phaseReadinessDocs,
   /current phase: `container-side-channels`/,
@@ -474,9 +491,19 @@ expectMatch(
   /does not\s+replace\s+`npm run build` or Rust analyzer tests/,
 );
 expectMatch(
+  "phase readiness describes toolchain readiness preflight",
+  phaseReadinessDocs,
+  /`npm run validate:toolchain-readiness` classifies local dependency setup blockers/,
+);
+expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+229 phase\s+evidence checks\)/,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+240 phase\s+evidence checks\)/,
+);
+expectMatch(
+  "phase readiness records latest toolchain readiness blocker",
+  phaseReadinessDocs,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:toolchain-readiness` reported\s+local setup blockers/,
 );
 expectMatch(
   "phase readiness records latest build blocker",
@@ -559,9 +586,19 @@ expectMatch(
   /Dependency-free static recovery chain: `npm run validate:static`/,
 );
 expectMatch(
+  "maintenance docs list toolchain readiness preflight",
+  maintenanceDocs,
+  /Toolchain readiness preflight: `npm run validate:toolchain-readiness`/,
+);
+expectMatch(
   "troubleshooting docs document tsc setup blocker",
   troubleshootingDocs,
   /`npm run build` starts with `tsc && vite build`[\s\S]*?stopped before TypeScript checked repository\s+source/,
+);
+expectMatch(
+  "troubleshooting docs describe toolchain readiness preflight",
+  troubleshootingDocs,
+  /`npm run validate:toolchain-readiness` checks the local `tsc` and `vite`\s+binaries[\s\S]*?offline Cargo metadata/,
 );
 expectMatch(
   "troubleshooting docs describe payload ID download requirements",

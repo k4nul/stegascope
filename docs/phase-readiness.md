@@ -103,14 +103,21 @@ informational WAV PCM LSB pre-transition evidence, run
 setup is blocked, but it does not replace `npm run build` or Rust analyzer tests
 for a phase-transition patch.
 
+`npm run validate:toolchain-readiness` classifies local dependency setup blockers
+before the transition command by checking the local TypeScript/Vite binaries and
+offline Cargo metadata resolution. It is a setup preflight, not transition
+evidence, and does not advance phase state.
+
 Recommended order:
 
 1. Install local Node dependencies from the checked-in lockfile if
    `node_modules/` is missing: `npm ci`.
-2. Run `npm run build`. Stop if this fails; do not change phase state.
-3. Run the focused JPEG and PNG Rust analyzer tests when reviewing only the
+2. Run `npm run validate:toolchain-readiness` if local setup is uncertain.
+   Stop if it reports blockers; do not change phase state.
+3. Run `npm run build`. Stop if this fails; do not change phase state.
+4. Run the focused JPEG and PNG Rust analyzer tests when reviewing only the
    current phase evidence.
-4. Run the full Rust test command before a phase-transition patch or after any
+5. Run the full Rust test command before a phase-transition patch or after any
    analyzer behavior changes.
 
 For a generic documentation-only pass, `git diff --check` is sufficient
@@ -540,7 +547,9 @@ Current automation context for this documentation handoff:
   payload preservation across segment and after-EOI channels without changing
   phase state. Static
   validation passed with `npm run validate:static` (86 download IPC checks and
-  229 phase evidence checks). Runtime transition validation still stopped before
+  240 phase evidence checks). `npm run validate:toolchain-readiness` reported
+  local setup blockers for missing local `tsc`/`vite` binaries and confirmed
+  offline Cargo metadata resolution. Runtime transition validation still stopped before
   repository source checks: `npm run build` reported `sh: 1: tsc: not found`,
   `npm ci --offline --ignore-scripts --cache /tmp/stegascope-npm-cache --no-audit --fund=false`
   failed because `yallist-3.1.1.tgz` was not cached,

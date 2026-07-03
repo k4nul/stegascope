@@ -69,6 +69,7 @@ Use the narrowest command that matches the touched scope:
 - Documentation-only: `git diff --check`
 - Phase gate metadata: `python3 -m json.tool docs/instructions/phase-gates.json`
 - Dependency-free static recovery chain: `npm run validate:static`
+- Toolchain readiness preflight: `npm run validate:toolchain-readiness`
 - Phase evidence static review: `npm run validate:phase-evidence`
 - Download IPC contract static review: `npm run validate:download-ipc`
 - Frontend or Vite changes: `npm run build`

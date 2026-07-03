@@ -98,6 +98,7 @@ Run the checks that match the scope of your change:
 
 ```bash
 npm run validate:static
+npm run validate:toolchain-readiness
 npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
@@ -134,6 +135,9 @@ These checks do not satisfy the analyzer phase transition gate.
 phase evidence validator, which includes the download IPC contract check.
 Run `validate:download-ipc` or `validate:phase-evidence` directly only when
 debugging those individual evidence checks.
+Run `validate:toolchain-readiness` before transition validation when local setup
+may be incomplete; it reports missing local `tsc`/`vite` binaries and offline
+Cargo metadata blockers without changing phase state.
 
 ## Project Layout
 
