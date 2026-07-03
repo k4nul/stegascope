@@ -533,6 +533,14 @@ Current automation context for this documentation handoff:
   and `git diff --check`. Runtime transition validation still requires local
   Node dependencies before `npm run build` can run the checked-in TypeScript and
   Vite toolchain.
+- July 4, 2026 KST validation-chain handoff refresh rechecked the current
+  container-side-channel package without changing phase state. Static
+  validation passed with `npm run validate:static` (86 download IPC checks and
+  227 phase evidence checks). Runtime transition validation still stopped before
+  repository source checks: `npm run build` reported `sh: 1: tsc: not found`,
+  and `cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer --no-run`
+  failed before project code because Cargo could not resolve
+  `index.crates.io` while fetching the `image` crate.
 
 The next valid phase-transition attempt should begin with successful dependency
 setup and a fresh `npm run build` result.

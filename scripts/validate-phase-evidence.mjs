@@ -475,7 +475,17 @@ expectMatch(
 expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /`npm run validate:static` \(80 download IPC checks and 221 phase\s+evidence checks\)/,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+227 phase\s+evidence checks\)/,
+);
+expectMatch(
+  "phase readiness records latest build blocker",
+  phaseReadinessDocs,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run build` reported `sh: 1: tsc: not found`/,
+);
+expectMatch(
+  "phase readiness records latest cargo DNS blocker",
+  phaseReadinessDocs,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`cargo test --manifest-path src-tauri\/Cargo\.toml jpeg_segment_analyzer --no-run`\s+failed before project code because Cargo could not resolve\s+`index\.crates\.io` while fetching the `image` crate/,
 );
 expectMatch(
   "phase readiness records latest uncached npm blocker",
