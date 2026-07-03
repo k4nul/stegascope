@@ -57,7 +57,8 @@ extraction behavior, including:
 
 There are initial command-level Rust tests for create, byte-input attach,
 path-based attach, invalid attach/analyze inputs, analyze, list-extracted-files,
-download command flow, and same-name payload download disambiguation.
+download command flow, malformed download request rejection, and same-name
+payload download disambiguation for PNG metadata and JPEG segment carriers.
 There are no frontend tests, negative-path command-level Rust tests for every
 Tauri command, or end-to-end desktop workflow tests yet.
 
@@ -198,8 +199,8 @@ npm run tauri -- build
 
 Add these before treating the app as a stable MVP:
 
-- Broaden command-level tests for remaining malformed download requests and
-  cross-command state transitions.
+- Broaden command-level tests for cross-command state transitions outside the
+  current download path.
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Broader test fixtures for supported media classes and known payload examples.

@@ -965,6 +965,88 @@ mod tests {
     }
 
     #[test]
+    fn analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_payloads() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let first_payload = b"%PDF-1.7\nfirst JPEG segment duplicate\n%%EOF\n";
+        let second_payload = b"%PDF-1.7\nsecond JPEG segment duplicate\n%%EOF\n";
+        let first_packet = stegascope_packet("shared-jpeg-note.pdf", first_payload);
+        let second_packet = stegascope_packet("shared-jpeg-note.pdf", second_payload);
+        let carrier_bytes = jpeg_with_segments(&[
+            (0xFE, first_packet.as_slice()),
+            (0xE1, second_packet.as_slice()),
+        ]);
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "duplicate-packets.jpg".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: carrier_bytes,
+            },
+            &state,
+        )
+        .expect("JPEG media file should attach");
+
+        let result =
+            analyze_task_with_state(task_id.clone(), &state).expect("JPEG analysis should run");
+        let stored_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("stored JPEG packet metadata should be readable");
+        let shared_files = stored_files
+            .iter()
+            .filter(|file| file.file_name == "shared-jpeg-note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(result.extracted_files.len(), 2);
+        assert_eq!(result.extracted_files, stored_files);
+        assert_eq!(shared_files.len(), 2);
+        assert_ne!(shared_files[0].id, shared_files[1].id);
+        assert!(shared_files
+            .iter()
+            .all(|file| file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(shared_files
+            .iter()
+            .all(|file| file.validation_status == ValidationStatus::Verified));
+
+        let temp_dir = TempDir::new("downloads-analyzed-same-name-jpeg-payloads");
+        let first_target = temp_dir.path().join("first.pdf");
+        let second_target = temp_dir.path().join("second.pdf");
+
+        download_extracted_file_with_state(
+            task_id.clone(),
+            shared_files[0].id.clone(),
+            first_target
+                .to_str()
+                .expect("first target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("first analyzed same-name JPEG payload should download");
+        download_extracted_file_with_state(
+            task_id,
+            shared_files[1].id.clone(),
+            second_target
+                .to_str()
+                .expect("second target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("second analyzed same-name JPEG payload should download");
+
+        let downloaded_payloads = [
+            fs::read(&first_target).expect("first analyzed JPEG payload should be readable"),
+            fs::read(&second_target).expect("second analyzed JPEG payload should be readable"),
+        ];
+
+        assert_ne!(downloaded_payloads[0], downloaded_payloads[1]);
+        assert!(downloaded_payloads.contains(&first_payload.to_vec()));
+        assert!(downloaded_payloads.contains(&second_payload.to_vec()));
+    }
+
+    #[test]
     fn analyze_and_download_command_test_rejects_payload_id_after_reattach() {
         let state = AppState::default();
         let task =
@@ -1384,6 +1466,100 @@ mod tests {
         assert!(!target_path.exists());
     }
 
+    #[test]
+    fn download_extracted_file_command_test_rejects_blank_task_id() {
+        let state = AppState::default();
+        let temp_dir = TempDir::new("rejects-blank-download-task-id");
+        let target_path = temp_dir.path().join("blank-task.bin");
+
+        let error = download_extracted_file_with_state(
+            "   ".to_string(),
+            "payload-id".to_string(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("blank download task id should be rejected");
+
+        assert_eq!(error, "task id is required");
+        assert!(!target_path.exists());
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_rejects_missing_task_without_writing() {
+        let state = AppState::default();
+        let temp_dir = TempDir::new("rejects-missing-download-task");
+        let target_path = temp_dir.path().join("missing-task.bin");
+
+        let error = download_extracted_file_with_state(
+            "task-missing".to_string(),
+            "payload-id".to_string(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("missing download task should be rejected");
+
+        assert_eq!(error, "task not found: task-missing");
+        assert!(!target_path.exists());
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_rejects_blank_save_path() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let file_id = store_sample_payload(
+            &state,
+            &task.task_id,
+            "blank-save-path-note.pdf",
+            b"blank save path payload",
+        );
+
+        let error =
+            download_extracted_file_with_state(task.task_id, file_id, "   ".to_string(), &state)
+                .expect_err("blank save path should be rejected");
+
+        assert_eq!(error, "save path is required");
+    }
+
+    #[test]
+    fn download_extracted_file_command_test_rejects_directory_save_path_without_writing() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let file_id = store_sample_payload(
+            &state,
+            &task.task_id,
+            "directory-target-note.pdf",
+            b"directory target payload",
+        );
+        let temp_dir = TempDir::new("rejects-directory-download-target");
+        let directory_path = temp_dir.path().join("existing-directory");
+        fs::create_dir_all(&directory_path).expect("directory target should be created");
+
+        let error = download_extracted_file_with_state(
+            task.task_id,
+            file_id,
+            directory_path
+                .to_str()
+                .expect("directory path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect_err("directory save path should be rejected");
+
+        assert_eq!(error, "save path points to a directory");
+        assert!(fs::read_dir(&directory_path)
+            .expect("directory should still be readable")
+            .next()
+            .is_none());
+    }
+
     fn sample_task_input() -> CreateTaskInput {
         CreateTaskInput {
             case_number: "CASE-001".to_string(),
@@ -1461,6 +1637,34 @@ mod tests {
         packet
     }
 
+    fn jpeg_with_segments(segments: &[(u8, &[u8])]) -> Vec<u8> {
+        const JPEG_SOI: &[u8; 2] = b"\xFF\xD8";
+        const JPEG_EOI: &[u8; 2] = b"\xFF\xD9";
+
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        for (marker, payload) in segments {
+            bytes.extend_from_slice(&jpeg_segment_bytes(*marker, payload));
+        }
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes
+    }
+
+    fn jpeg_segment_bytes(marker: u8, data: &[u8]) -> Vec<u8> {
+        let segment_length = data
+            .len()
+            .checked_add(2)
+            .expect("test JPEG segment should fit length field");
+        assert!(segment_length <= u16::MAX as usize);
+
+        let mut segment = Vec::new();
+        segment.push(0xFF);
+        segment.push(marker);
+        segment.extend_from_slice(&(segment_length as u16).to_be_bytes());
+        segment.extend_from_slice(data);
+        segment
+    }
+
     fn sample_extracted_file(file_name: &str, analyzer_name: &str) -> ExtractedFile {
         ExtractedFile::new(
             file_name,
@@ -1472,6 +1676,34 @@ mod tests {
             "application/pdf",
             FileSignature::known("PDF document", "pdf", "application/pdf", "25504446"),
         )
+    }
+
+    fn store_sample_payload(
+        state: &AppState,
+        task_id: &str,
+        file_name: &str,
+        bytes: &[u8],
+    ) -> String {
+        let extracted_file = sample_extracted_file(file_name, "unit-test-analyzer");
+
+        {
+            let mut tasks = lock_tasks(state).expect("task store should lock");
+            let stored_task = tasks
+                .get_mut(task_id)
+                .expect("created task should be present");
+            stored_task.replace_extracted_payloads(vec![ExtractedPayload {
+                file: extracted_file,
+                bytes: bytes.to_vec(),
+                source: PayloadSource::SignatureScan,
+            }]);
+        }
+
+        get_extracted_files_with_state(task_id.to_string(), state)
+            .expect("stored extracted files should be readable")
+            .first()
+            .expect("stored payload should expose an id")
+            .id
+            .clone()
     }
 
     struct TempDir {
