@@ -2494,6 +2494,71 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_continues_past_non_payload_marker_segments() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDB, b"quantization-table"));
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xE1, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "jpeg_app1_segment_2_payload_0.pdf")
+            .expect("expected APP1 payload after non-payload marker segment");
+
+        assert_eq!(file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_multiple_segments() {
+        let first_secret: &[u8] = b"%PDF-1.7\nfirst segmented duplicate\n%%EOF\n";
+        let second_secret: &[u8] = b"%PDF-1.7\nsecond segmented duplicate\n%%EOF\n";
+        let first_packet = stegascope_packet("shared_jpeg_note.pdf", first_secret);
+        let second_packet = stegascope_packet("shared_jpeg_note.pdf", second_secret);
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, &first_packet));
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xE1, &second_packet));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payloads = outcome
+            .extracted_payloads
+            .iter()
+            .filter(|payload| payload.file.file_name == "shared_jpeg_note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(payloads.len(), 2);
+        assert_ne!(payloads[0].file.id, payloads[1].file.id);
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.file.validation_status == ValidationStatus::Verified));
+        assert!(payloads.iter().any(|payload| payload.bytes == first_secret));
+        assert!(payloads
+            .iter()
+            .any(|payload| payload.bytes == second_secret));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload() {
         let bytes = jpeg_with_comment_segment_and_after_eoi_payload(
             b"segment-note\xFF\xD9inside-comment",
