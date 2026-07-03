@@ -62,9 +62,10 @@ extraction behavior, including:
 
 There are initial command-level Rust tests for create, byte-input attach,
 path-based attach, invalid attach/analyze inputs, path-based reattach result
-clearing, analyze, list-extracted-files success and missing-task rejection,
-download command flow, malformed download request rejection, and same-name
-payload download disambiguation for PNG metadata and JPEG segment carriers.
+clearing, path-attached JPEG segment analysis, analyze, list-extracted-files
+success and missing-task rejection, download command flow, malformed download
+request rejection, and same-name payload download disambiguation for PNG
+metadata and JPEG segment carriers.
 There are no frontend tests, negative-path command-level Rust tests for every
 Tauri command, or end-to-end desktop workflow tests yet.
 
