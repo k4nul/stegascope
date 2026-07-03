@@ -2603,6 +2603,45 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_segment_and_after_eoi() {
+        let segment_secret: &[u8] = b"%PDF-1.7\nsegment same-name payload\n%%EOF\n";
+        let after_eoi_secret: &[u8] = b"%PDF-1.7\nafter-eoi same-name payload\n%%EOF\n";
+        let segment_packet = stegascope_packet("shared_jpeg_note.pdf", segment_secret);
+        let after_eoi_packet = stegascope_packet("shared_jpeg_note.pdf", after_eoi_secret);
+        let bytes =
+            jpeg_with_comment_segment_and_after_eoi_payload(&segment_packet, &after_eoi_packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payloads = outcome
+            .extracted_payloads
+            .iter()
+            .filter(|payload| payload.file.file_name == "shared_jpeg_note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(payloads.len(), 2);
+        assert_ne!(payloads[0].file.id, payloads[1].file.id);
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(payloads
+            .iter()
+            .all(|payload| payload.file.validation_status == ValidationStatus::Verified));
+        assert!(payloads
+            .iter()
+            .any(|payload| payload.bytes == segment_secret));
+        assert!(payloads
+            .iter()
+            .any(|payload| payload.bytes == after_eoi_secret));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads() {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(JPEG_SOI);
