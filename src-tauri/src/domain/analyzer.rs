@@ -1304,10 +1304,9 @@ fn signature_payload_candidates(
         .iter()
         .filter(|signature| signature.magic.len() >= 3)
     {
-        for offset in find_signature_offsets(bytes, signature.magic)
-            .into_iter()
-            .take(3)
-        {
+        let mut accepted_count = 0;
+
+        for offset in find_signature_offsets(bytes, signature.magic) {
             if offset < min_offset {
                 continue;
             }
@@ -1333,6 +1332,11 @@ fn signature_payload_candidates(
                 ValidationStatus::Validated,
                 validation_note,
             ));
+
+            accepted_count += 1;
+            if accepted_count >= 3 {
+                break;
+            }
         }
     }
 
@@ -2448,6 +2452,42 @@ mod tests {
         assert_eq!(file.file_type, "application/pdf");
         assert_eq!(file.suspicious_level, SuspiciousLevel::High);
         assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_skips_invalid_signature_decoys_before_valid_segment_signature() {
+        let mut segment_payload = Vec::new();
+        for index in 0..3 {
+            segment_payload
+                .extend_from_slice(format!("%PDF-1.7\ninvalid decoy {index}\n").as_bytes());
+        }
+        segment_payload.extend_from_slice(valid_pdf_payload());
+        let bytes = jpeg_with_comment_segment(&segment_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| {
+                payload
+                    .file
+                    .file_name
+                    .starts_with("jpeg_com_segment_1_payload_")
+                    && payload.file.file_name.ends_with(".pdf")
+            })
+            .expect("expected valid PDF payload after invalid signature decoys");
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.source, PayloadSource::SignatureScan);
+        assert_eq!(payload.bytes, valid_pdf_payload());
     }
 
     #[test]

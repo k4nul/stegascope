@@ -40,11 +40,12 @@ extraction behavior, including:
   packet fallback to signature evidence.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
-  non-payload marker segment exclusion, malformed segment safety,
-  non-JPEG/truncated input safety, scan-data isolation, marker-shaped scan-data
-  isolation, byte-stuffed SOS EOI isolation, SOS restart/fill marker isolation,
-  malformed SOS marker recovery, malformed SOS false-EOI length recovery,
-  post-SOS marker-segment skipping, and after-EOI evidence labeling.
+  invalid signature decoy recovery, non-payload marker segment exclusion,
+  malformed segment safety, non-JPEG/truncated input safety, scan-data
+  isolation, marker-shaped scan-data isolation, byte-stuffed SOS EOI isolation,
+  SOS restart/fill marker isolation, malformed SOS marker recovery, malformed
+  SOS false-EOI length recovery, post-SOS marker-segment skipping, and
+  after-EOI evidence labeling.
 - Container side-channel boundaries, including metadata chunks after structural
   PNG `IEND`, JPEG marker-like bytes after structural EOI, and same-name
   distinct payload preservation.
