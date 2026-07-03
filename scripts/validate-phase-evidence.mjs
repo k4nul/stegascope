@@ -294,6 +294,7 @@ for (const evidence of [
   "jpeg_segment_analyzer_ignores_false_eoi_in_malformed_sos_marker_length",
   "jpeg_segment_analyzer_skips_post_sos_segment_payload_when_finding_after_eoi",
   "jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_segment_and_after_eoi",
+  "jpeg_segment_analyzer_rejects_non_marker_header_bytes_before_payloads",
   "jpeg_segment_analyzer_handles_malformed_segment_lengths",
   "jpeg_segment_analyzer_returns_empty_for_non_jpeg_and_truncated_inputs",
 ]) {
@@ -505,7 +506,7 @@ expectMatch(
 expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+246 phase\s+evidence checks\)/,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+248 phase\s+evidence checks\)/,
 );
 expectMatch(
   "phase readiness records latest toolchain readiness blocker",

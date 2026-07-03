@@ -923,36 +923,27 @@ struct JpegMarker {
 }
 
 fn next_jpeg_marker(bytes: &[u8], mut offset: usize) -> Option<JpegMarker> {
-    while offset < bytes.len() {
-        if bytes[offset] != 0xFF {
-            offset += 1;
-            continue;
-        }
-
-        let marker_offset = offset;
-        while offset < bytes.len() && bytes[offset] == 0xFF {
-            offset += 1;
-        }
-
-        if offset >= bytes.len() {
-            return None;
-        }
-
-        let marker = bytes[offset];
-        offset += 1;
-
-        if marker == 0x00 {
-            continue;
-        }
-
-        return Some(JpegMarker {
-            marker_offset,
-            marker,
-            payload_offset: offset,
-        });
+    if offset >= bytes.len() || bytes[offset] != 0xFF {
+        return None;
     }
 
-    None
+    let marker_offset = offset;
+    while offset < bytes.len() && bytes[offset] == 0xFF {
+        offset += 1;
+    }
+
+    if offset >= bytes.len() {
+        return None;
+    }
+
+    let marker = bytes[offset];
+    offset += 1;
+
+    (marker != 0x00).then_some(JpegMarker {
+        marker_offset,
+        marker,
+        payload_offset: offset,
+    })
 }
 
 fn jpeg_segment_data_bounds(bytes: &[u8], length_offset: usize) -> Option<(usize, usize)> {
@@ -3064,6 +3055,25 @@ mod tests {
             .extracted_files
             .iter()
             .any(|file| file.file_name.starts_with("jpeg_app")));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_non_marker_header_bytes_before_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(b"header junk before markers ");
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
     }
 
     #[test]

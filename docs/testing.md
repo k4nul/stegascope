@@ -44,12 +44,12 @@ extraction behavior, including:
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   invalid signature decoy recovery, non-payload marker segment exclusion,
   structural EOI requirement before segment payload extraction, malformed
-  segment safety, non-JPEG/truncated input safety, scan-data isolation,
-  marker-shaped scan-data isolation, byte-stuffed SOS EOI isolation, SOS
-  restart/fill marker isolation, malformed SOS marker recovery, malformed SOS
-  false-EOI length recovery, post-SOS marker-segment skipping, and after-EOI
-  evidence labeling, including same-name packet preservation across segment and
-  after-EOI channels.
+  segment and non-marker header byte safety, non-JPEG/truncated input safety,
+  scan-data isolation, marker-shaped scan-data isolation, byte-stuffed SOS EOI
+  isolation, SOS restart/fill marker isolation, malformed SOS marker recovery,
+  malformed SOS false-EOI length recovery, post-SOS marker-segment skipping,
+  and after-EOI evidence labeling, including same-name packet preservation
+  across segment and after-EOI channels.
 - Container side-channel boundaries, including metadata chunks after structural
   PNG `IEND`, invalid or missing PNG `IEND` terminators, JPEG marker-like bytes
   after structural EOI, and same-name distinct payload preservation.
