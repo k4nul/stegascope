@@ -50,8 +50,9 @@ Current implementation facts:
   inside the Tauri command layer before loader routing.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; command-level Rust tests cover create, attach,
-  analyze, list-extracted-files, download flow, and same-name payload download
-  disambiguation; frontend UI/API flow tests are still missing.
+  attach/analyze negative paths, analyze, list-extracted-files, download flow,
+  and same-name payload download disambiguation; frontend UI/API flow tests are
+  still missing.
 
 ## Documentation Map
 

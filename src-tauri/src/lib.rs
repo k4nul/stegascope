@@ -683,6 +683,68 @@ mod tests {
     }
 
     #[test]
+    fn attach_media_file_command_test_rejects_invalid_byte_inputs() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+
+        let blank_task_id_error = attach_media_file_with_state(
+            "   ".to_string(),
+            UploadedMediaInput {
+                file_name: "carrier.png".to_string(),
+                file_size_bytes: 4,
+                file_type: "image/png".to_string(),
+                bytes: vec![1, 2, 3, 4],
+            },
+            &state,
+        )
+        .expect_err("blank task id should be rejected");
+        assert_eq!(blank_task_id_error, "task id is required");
+
+        let blank_file_name_error = attach_media_file_with_state(
+            task.task_id.clone(),
+            UploadedMediaInput {
+                file_name: "   ".to_string(),
+                file_size_bytes: 4,
+                file_type: "image/png".to_string(),
+                bytes: vec![1, 2, 3, 4],
+            },
+            &state,
+        )
+        .expect_err("blank file name should be rejected");
+        assert_eq!(blank_file_name_error, "file name is required");
+
+        let empty_file_error = attach_media_file_with_state(
+            task.task_id.clone(),
+            UploadedMediaInput {
+                file_name: "empty.png".to_string(),
+                file_size_bytes: 0,
+                file_type: "image/png".to_string(),
+                bytes: Vec::new(),
+            },
+            &state,
+        )
+        .expect_err("empty byte upload should be rejected");
+        assert_eq!(empty_file_error, "media file is empty");
+
+        let unsupported_type_error = attach_media_file_with_state(
+            task.task_id,
+            UploadedMediaInput {
+                file_name: "carrier.bin".to_string(),
+                file_size_bytes: 4,
+                file_type: String::new(),
+                bytes: vec![1, 2, 3, 4],
+            },
+            &state,
+        )
+        .expect_err("unknown binary media type should be rejected");
+        assert_eq!(
+            unsupported_type_error,
+            "unsupported media type for loader: application/octet-stream"
+        );
+    }
+
+    #[test]
     fn attach_media_file_from_path_command_test_reads_local_media_path() {
         let state = AppState::default();
         let task =
@@ -709,6 +771,64 @@ mod tests {
         assert_eq!(media_file.file_size_bytes, media_bytes.len() as u64);
         assert_eq!(media_file.file_type, "image/png");
         assert!(response.extracted_files.is_empty());
+    }
+
+    #[test]
+    fn attach_media_file_from_path_command_test_rejects_invalid_paths() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let temp_dir = TempDir::new("path-media-attach-invalid");
+
+        let blank_path_error = attach_media_file_from_path_with_state(
+            task.task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: "   ".to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("blank media path should be rejected");
+        assert_eq!(blank_path_error, "file path is required");
+
+        let missing_path = temp_dir.path().join("missing.png");
+        let missing_path_error = attach_media_file_from_path_with_state(
+            task.task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: missing_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("missing media path should be rejected");
+        assert!(
+            missing_path_error.starts_with("failed to inspect media file:"),
+            "unexpected missing path error: {missing_path_error}"
+        );
+
+        let directory_error = attach_media_file_from_path_with_state(
+            task.task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: temp_dir.path().display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("directory media path should be rejected");
+        assert_eq!(directory_error, "media path is not a file");
+
+        let empty_media_path = temp_dir.path().join("empty.png");
+        fs::write(&empty_media_path, []).expect("empty media fixture should be written");
+        let empty_file_error = attach_media_file_from_path_with_state(
+            task.task_id,
+            UploadedMediaPathInput {
+                file_path: empty_media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("empty path media file should be rejected");
+        assert_eq!(empty_file_error, "media file is empty");
     }
 
     #[test]
@@ -741,6 +861,25 @@ mod tests {
         assert!(result.completed_at.starts_with("unix:"));
         assert!(result.extracted_files.is_empty());
         assert!(stored_files.is_empty());
+    }
+
+    #[test]
+    fn analyze_task_command_test_rejects_missing_task_or_media() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+
+        let blank_task_id_error = analyze_task_with_state("   ".to_string(), &state)
+            .expect_err("blank task id should be rejected");
+        assert_eq!(blank_task_id_error, "task id is required");
+
+        let missing_task_error = analyze_task_with_state("task-missing".to_string(), &state)
+            .expect_err("missing task should be rejected");
+        assert_eq!(missing_task_error, "task not found: task-missing");
+
+        let no_media_error = analyze_task_with_state(task.task_id, &state)
+            .expect_err("analysis without media should be rejected");
+        assert_eq!(no_media_error, "task does not have a media file attached");
     }
 
     #[test]
