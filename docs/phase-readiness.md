@@ -41,14 +41,14 @@ The practical handoff state is:
 
 ## Latest Recovery Snapshot
 
-July 1, 2026 KST recovery review keeps `current_phase` at
+July 4, 2026 KST validation-chain recovery review keeps `current_phase` at
 `container-side-channels`. The recovered package includes the container
 side-channel source evidence, payload-ID download disambiguation, maintained
-documentation, dependency-free validators, and a reconciled tracked management
-policy marker for public handoff. The validation gap is still the local runtime
-toolchain: `npm run build` requires installed Node dependencies for `tsc` and
-`vite`, and Rust/Tauri checks require cached or reachable Cargo dependencies
-before they can execute repository tests.
+documentation, dependency-free validators, JPEG structural EOI test evidence,
+and a reconciled tracked management policy marker for public handoff. The
+validation gap is still the local runtime toolchain: `npm run build` requires
+installed Node dependencies for `tsc` and `vite`, and Rust/Tauri checks require
+cached or reachable Cargo dependencies before they can execute repository tests.
 
 ## Pre-Transition Audio Evidence
 
@@ -544,10 +544,10 @@ Current automation context for this documentation handoff:
   Vite toolchain.
 - July 4, 2026 KST validation-chain handoff refresh rechecked the current
   container-side-channel package and added static evidence for same-name JPEG
-  payload preservation across segment and after-EOI channels without changing
-  phase state. Static
+  payload preservation across segment and after-EOI channels plus structural
+  EOI-before-segment coverage without changing phase state. Static
   validation passed with `npm run validate:static` (86 download IPC checks and
-  240 phase evidence checks). `npm run validate:toolchain-readiness` reported
+  242 phase evidence checks). `npm run validate:toolchain-readiness` reported
   local setup blockers for missing local `tsc`/`vite` binaries and confirmed
   offline Cargo metadata resolution. Runtime transition validation still stopped before
   repository source checks: `npm run build` reported `sh: 1: tsc: not found`,

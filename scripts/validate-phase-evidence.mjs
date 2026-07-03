@@ -283,6 +283,7 @@ for (const evidence of [
   "jpeg_segment_analyzer_extracts_valid_signature_from_app_segment",
   "jpeg_segment_analyzer_scans_app0_and_app15_boundary_segments",
   "jpeg_segment_analyzer_ignores_non_payload_marker_segments",
+  "jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads",
   "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",
   "jpeg_segment_analyzer_does_not_treat_comment_data_after_false_eoi_as_trailing_payload",
   "jpeg_segment_analyzer_does_not_scan_sos_image_data_as_segment_payload",
@@ -498,7 +499,7 @@ expectMatch(
 expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+240 phase\s+evidence checks\)/,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+242 phase\s+evidence checks\)/,
 );
 expectMatch(
   "phase readiness records latest toolchain readiness blocker",
