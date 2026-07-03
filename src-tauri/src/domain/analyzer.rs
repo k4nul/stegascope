@@ -1341,14 +1341,16 @@ fn signature_payload_candidates(
 
 const STEGASCOPE_PACKET_MAGIC: &[u8; 8] = b"SS2X3ME1";
 const STEGASCOPE_PACKET_HEADER_LEN: usize = 50;
+const MAX_STEGASCOPE_PACKET_PAYLOADS: usize = 3;
 
 fn find_stegascope_packet_candidates(bytes: &[u8], analyzer_name: &str) -> Vec<ExtractedPayload> {
     let mut payloads = Vec::new();
 
-    for offset in find_signature_offsets(bytes, STEGASCOPE_PACKET_MAGIC)
-        .into_iter()
-        .take(3)
-    {
+    for offset in find_signature_offsets(bytes, STEGASCOPE_PACKET_MAGIC) {
+        if payloads.len() >= MAX_STEGASCOPE_PACKET_PAYLOADS {
+            break;
+        }
+
         let Some(packet) = parse_stegascope_packet(bytes, offset) else {
             continue;
         };
@@ -2313,6 +2315,45 @@ mod tests {
         assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
         assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
         assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_skips_corrupt_packet_decoys_before_valid_comment_packet() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("late_jpeg_note.pdf", secret);
+        let mut comment = Vec::new();
+
+        for index in 0..3 {
+            let mut decoy = stegascope_packet(
+                &format!("corrupt_jpeg_note_{index}.pdf"),
+                b"%PDF-1.7\ncorrupt decoy payload\n%%EOF\n",
+            );
+            decoy[18] ^= 0xFF;
+            comment.extend_from_slice(&decoy);
+        }
+        comment.extend_from_slice(&packet);
+
+        let bytes = jpeg_with_comment_segment(&comment);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "late_jpeg_note.pdf")
+            .expect("expected valid JPEG COM packet after corrupt decoys");
+
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.source, PayloadSource::VerifiedPacket);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
     }
 
     #[test]
