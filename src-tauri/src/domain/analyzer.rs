@@ -2523,6 +2523,32 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_extracts_packet_payload_from_app_segment() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("jpeg_app_note.pdf", secret);
+        let bytes = jpeg_with_segment_and_eoi(0xE1, &packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_app_note.pdf")
+            .expect("expected verified JPEG APP packet payload");
+
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.file_size_bytes, secret.len() as u64);
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.source, PayloadSource::VerifiedPacket);
+        assert_eq!(payload.bytes, secret);
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_skips_invalid_signature_decoys_before_valid_segment_signature() {
         let mut segment_payload = Vec::new();
         for index in 0..3 {
@@ -2627,6 +2653,31 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_handles_fill_bytes_between_header_markers() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0xFF, 0xFF]);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "jpeg_com_segment_1_payload_0.pdf")
+            .expect("expected COM payload after JPEG marker fill bytes");
+
+        assert_eq!(file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_multiple_segments() {
         let first_secret: &[u8] = b"%PDF-1.7\nfirst segmented duplicate\n%%EOF\n";
         let second_secret: &[u8] = b"%PDF-1.7\nsecond segmented duplicate\n%%EOF\n";
@@ -2664,6 +2715,44 @@ mod tests {
         assert!(payloads
             .iter()
             .any(|payload| payload.bytes == second_secret));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_extracts_multiple_packet_payloads_from_single_comment_segment() {
+        let first_secret: &[u8] = b"%PDF-1.7\nfirst combined comment payload\n%%EOF\n";
+        let second_secret: &[u8] = b"%PDF-1.7\nsecond combined comment payload\n%%EOF\n";
+        let first_packet = stegascope_packet("first_comment_note.pdf", first_secret);
+        let second_packet = stegascope_packet("second_comment_note.pdf", second_secret);
+        let mut comment = Vec::new();
+        comment.extend_from_slice(&first_packet);
+        comment.extend_from_slice(&second_packet);
+        let bytes = jpeg_with_comment_segment(&comment);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 2);
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.file.validation_status == ValidationStatus::Verified));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "first_comment_note.pdf" && payload.bytes == first_secret
+        }));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.file_name == "second_comment_note.pdf" && payload.bytes == second_secret
+        }));
     }
 
     #[test]
@@ -2767,6 +2856,32 @@ mod tests {
             .extracted_files
             .iter()
             .any(|file| file.file_name.starts_with("jpeg_after_eoi_payload_")));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_invalid_after_eoi_packet_and_keeps_signature_fallback() {
+        let mut invalid_packet =
+            stegascope_packet("corrupt_after_eoi_note.pdf", valid_pdf_payload());
+        invalid_packet[18] ^= 0xFF;
+        let bytes = jpeg_with_after_eoi_payload(&invalid_packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.source == PayloadSource::SignatureScan
+                && payload.file.file_type == "application/pdf"
+                && payload.file.suspicious_level == SuspiciousLevel::Critical
+                && payload.file.validation_status == ValidationStatus::Validated
+                && payload.bytes == valid_pdf_payload()
+        }));
     }
 
     #[test]
