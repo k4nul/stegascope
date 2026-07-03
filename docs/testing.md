@@ -63,7 +63,7 @@ extraction behavior, including:
 There are initial command-level Rust tests for create, byte-input attach,
 path-based attach, invalid attach/analyze inputs, stale-task attach rejection
 before media loader validation or local path inspection, path-based reattach
-result clearing, path-attached JPEG segment analysis, analyze,
+result clearing, path-attached JPEG segment and after-EOI analysis/download, analyze,
 list-extracted-files success and missing-task rejection, download command flow,
 malformed download request rejection, and same-name payload download
 disambiguation for PNG metadata and JPEG segment carriers.
