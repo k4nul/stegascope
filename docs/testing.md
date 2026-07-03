@@ -178,15 +178,18 @@ cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_
 cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_blank_payload_id
 cargo test --manifest-path src-tauri/Cargo.toml download_extracted_file_command_test_rejects_missing_payload_bytes
 cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_disambiguates_same_name_packet_payloads
+cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_payloads
+cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_after_eoi_payloads
 cargo test --manifest-path src-tauri/Cargo.toml analyze_and_download_command_test_rejects_payload_id_after_reattach
 ```
 
 These tests verify that exact duplicate payload records collapse, task storage
 keeps verified packet payloads ahead of signature-only fallback candidates,
 distinct same-name recovered byte streams remain visible for verified packets
-and signature scans, IDs for payloads no longer present in the current result
-are rejected after result replacement or media reattach/reanalysis, blank
-payload IDs fail required-field validation, and downloads use payload IDs
+and signature scans, JPEG segment and after-EOI same-name payloads download by
+their current payload IDs, IDs for payloads no longer present in the current
+result are rejected after result replacement or media reattach/reanalysis,
+blank payload IDs fail required-field validation, and downloads use payload IDs
 instead of the displayed file name. The missing payload filter covers the
 negative path where the requested payload ID is not in the current result.
 

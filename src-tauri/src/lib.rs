@@ -1047,6 +1047,86 @@ mod tests {
     }
 
     #[test]
+    fn analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_after_eoi_payloads() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let segment_payload = b"%PDF-1.7\nJPEG segment duplicate\n%%EOF\n";
+        let after_eoi_payload = b"%PDF-1.7\nJPEG after-EOI duplicate\n%%EOF\n";
+        let segment_packet = stegascope_packet("shared-jpeg-note.pdf", segment_payload);
+        let after_eoi_packet = stegascope_packet("shared-jpeg-note.pdf", after_eoi_payload);
+        let mut carrier_bytes = jpeg_with_segments(&[(0xFE, segment_packet.as_slice())]);
+        carrier_bytes.extend_from_slice(&after_eoi_packet);
+
+        attach_media_file_with_state(
+            task_id.clone(),
+            UploadedMediaInput {
+                file_name: "duplicate-segment-after-eoi-packets.jpg".to_string(),
+                file_size_bytes: 0,
+                file_type: String::new(),
+                bytes: carrier_bytes,
+            },
+            &state,
+        )
+        .expect("JPEG media file should attach");
+
+        let result =
+            analyze_task_with_state(task_id.clone(), &state).expect("JPEG analysis should run");
+        let stored_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("stored JPEG packet metadata should be readable");
+        let shared_files = stored_files
+            .iter()
+            .filter(|file| file.file_name == "shared-jpeg-note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(result.extracted_files.len(), 2);
+        assert_eq!(result.extracted_files, stored_files);
+        assert_eq!(shared_files.len(), 2);
+        assert_ne!(shared_files[0].id, shared_files[1].id);
+        assert!(shared_files
+            .iter()
+            .all(|file| file.analyzer_name == "jpeg-segment-analyzer"));
+        assert!(shared_files
+            .iter()
+            .all(|file| file.validation_status == ValidationStatus::Verified));
+
+        let temp_dir = TempDir::new("downloads-analyzed-segment-after-eoi-jpeg-payloads");
+        let first_target = temp_dir.path().join("first.pdf");
+        let second_target = temp_dir.path().join("second.pdf");
+
+        download_extracted_file_with_state(
+            task_id.clone(),
+            shared_files[0].id.clone(),
+            first_target
+                .to_str()
+                .expect("first target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("same-name JPEG segment payload should download");
+        download_extracted_file_with_state(
+            task_id,
+            shared_files[1].id.clone(),
+            second_target
+                .to_str()
+                .expect("second target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("same-name JPEG after-EOI payload should download");
+
+        let downloaded_payloads = [
+            fs::read(&first_target).expect("first analyzed JPEG payload should be readable"),
+            fs::read(&second_target).expect("second analyzed JPEG payload should be readable"),
+        ];
+
+        assert_ne!(downloaded_payloads[0], downloaded_payloads[1]);
+        assert!(downloaded_payloads.contains(&segment_payload.to_vec()));
+        assert!(downloaded_payloads.contains(&after_eoi_payload.to_vec()));
+    }
+
+    #[test]
     fn analyze_and_download_command_test_rejects_payload_id_after_reattach() {
         let state = AppState::default();
         let task =

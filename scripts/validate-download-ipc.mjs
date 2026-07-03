@@ -141,6 +141,8 @@ const requiredPayloadEvidence = [
   "download_extracted_file_command_test_rejects_blank_payload_id",
   "download_extracted_file_command_test_rejects_missing_payload_bytes",
   "analyze_and_download_command_test_disambiguates_same_name_packet_payloads",
+  "analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_payloads",
+  "analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_after_eoi_payloads",
   "analyze_and_download_command_test_rejects_payload_id_after_reattach",
 ];
 
@@ -330,6 +332,14 @@ const payloadEvidenceSources = new Map([
   ["download_extracted_file_command_test_rejects_missing_payload_bytes", rustSource],
   [
     "analyze_and_download_command_test_disambiguates_same_name_packet_payloads",
+    rustSource,
+  ],
+  [
+    "analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_payloads",
+    rustSource,
+  ],
+  [
+    "analyze_and_download_command_test_disambiguates_same_name_jpeg_segment_after_eoi_payloads",
     rustSource,
   ],
   ["analyze_and_download_command_test_rejects_payload_id_after_reattach", rustSource],
