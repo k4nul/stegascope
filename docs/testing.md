@@ -61,11 +61,12 @@ extraction behavior, including:
 - Invalid MP3 candidate rejection.
 
 There are initial command-level Rust tests for create, byte-input attach,
-path-based attach, invalid attach/analyze inputs, path-based reattach result
-clearing, path-attached JPEG segment analysis, analyze, list-extracted-files
-success and missing-task rejection, download command flow, malformed download
-request rejection, and same-name payload download disambiguation for PNG
-metadata and JPEG segment carriers.
+path-based attach, invalid attach/analyze inputs, stale-task attach rejection
+before media loader validation or local path inspection, path-based reattach
+result clearing, path-attached JPEG segment analysis, analyze,
+list-extracted-files success and missing-task rejection, download command flow,
+malformed download request rejection, and same-name payload download
+disambiguation for PNG metadata and JPEG segment carriers.
 There are no frontend tests, negative-path command-level Rust tests for every
 Tauri command, or end-to-end desktop workflow tests yet.
 
@@ -142,6 +143,7 @@ For the current frontend-to-Rust local-file attach boundary:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_reads_local_media_path
+cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection
 ```
 
 For Rust command, loader, task, or analyzer changes:

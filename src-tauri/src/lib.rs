@@ -164,6 +164,8 @@ fn attach_media_file_with_state(
         return Err("media file is empty".to_string());
     }
 
+    ensure_task_exists(&task_id, state)?;
+
     let file_size_bytes = if input.file_size_bytes == 0 {
         input.bytes.len() as u64
     } else {
@@ -197,6 +199,7 @@ fn attach_media_file_from_path_with_state(
 ) -> Result<TaskResponse, String> {
     validate_required(&task_id, "task id")?;
     validate_required(&input.file_path, "file path")?;
+    ensure_task_exists(&task_id, state)?;
 
     let path = PathBuf::from(input.file_path.trim());
     let metadata =
@@ -247,6 +250,15 @@ fn attach_media_bytes_with_state(
     task.clear_extracted_files();
 
     Ok(task_to_response(task_id.trim(), task))
+}
+
+fn ensure_task_exists(task_id: &str, state: &AppState) -> Result<(), String> {
+    let tasks = lock_tasks(state)?;
+    if tasks.contains_key(task_id.trim()) {
+        Ok(())
+    } else {
+        Err(format!("task not found: {}", task_id.trim()))
+    }
 }
 
 #[tauri::command]
@@ -745,6 +757,25 @@ mod tests {
     }
 
     #[test]
+    fn attach_media_file_command_test_rejects_missing_task_before_loader_validation() {
+        let state = AppState::default();
+
+        let error = attach_media_file_with_state(
+            "task-missing".to_string(),
+            UploadedMediaInput {
+                file_name: "carrier.bin".to_string(),
+                file_size_bytes: 4,
+                file_type: String::new(),
+                bytes: vec![1, 2, 3, 4],
+            },
+            &state,
+        )
+        .expect_err("missing task should be rejected before media loader validation");
+
+        assert_eq!(error, "task not found: task-missing");
+    }
+
+    #[test]
     fn attach_media_file_from_path_command_test_reads_local_media_path() {
         let state = AppState::default();
         let task =
@@ -829,6 +860,25 @@ mod tests {
         )
         .expect_err("empty path media file should be rejected");
         assert_eq!(empty_file_error, "media file is empty");
+    }
+
+    #[test]
+    fn attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection() {
+        let state = AppState::default();
+        let temp_dir = TempDir::new("path-media-missing-task");
+        let missing_path = temp_dir.path().join("missing-carrier.png");
+
+        let error = attach_media_file_from_path_with_state(
+            "task-missing".to_string(),
+            UploadedMediaPathInput {
+                file_path: missing_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("missing task should be rejected before inspecting the local path");
+
+        assert_eq!(error, "task not found: task-missing");
     }
 
     #[test]

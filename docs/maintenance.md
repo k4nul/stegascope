@@ -97,6 +97,7 @@ Document any skipped validation with the exact blocker.
   result clearing, analyze, list-extracted-files, download flow, and stale
   payload-ID rejection after reattach/reanalysis have initial tests.
   Attach/analyze negative paths now cover invalid byte input, invalid path input,
+  stale task IDs before media loader validation or local path inspection,
   missing tasks, and missing media, while broader cross-command state
   transitions still need coverage.
 - Frontend UI/API flow tests are missing.

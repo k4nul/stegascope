@@ -309,6 +309,7 @@ for (const evidence of [
   "attachMediaFile",
   "attach_media_file_from_path",
   "attach_media_file_from_path_command_test_reads_local_media_path",
+  "attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection",
 ]) {
   expectGateEvidence("local-file-boundary-evidence", evidence);
 }
@@ -337,6 +338,11 @@ expectMatch(
   "Rust command test covers local path attach boundary",
   rustCommandSource,
   /fn attach_media_file_from_path_command_test_reads_local_media_path/,
+);
+expectMatch(
+  "Rust command test rejects missing task before local path inspection",
+  rustCommandSource,
+  /fn attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection/,
 );
 
 for (const evidence of [
@@ -499,7 +505,7 @@ expectMatch(
 expectMatch(
   "phase readiness records latest static validation count",
   phaseReadinessDocs,
-  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+242 phase\s+evidence checks\)/,
+  /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`npm run validate:static` \(86 download IPC checks and\s+246 phase\s+evidence checks\)/,
 );
 expectMatch(
   "phase readiness records latest toolchain readiness blocker",
