@@ -1101,6 +1101,71 @@ mod tests {
     }
 
     #[test]
+    fn analyze_task_command_test_reads_path_attached_png_after_iend_payload() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let task_id = task.task_id;
+        let temp_dir = TempDir::new("path-png-after-iend-analysis");
+        let secret = b"%PDF-1.7\npath-attached PNG after-IEND payload\n%%EOF\n";
+        let packet = stegascope_packet("path-after-iend-note.pdf", secret);
+        let carrier_bytes = png_with_after_iend_payload(&packet);
+        let media_path = temp_dir.path().join("path-after-iend-carrier.png");
+        fs::write(&media_path, &carrier_bytes).expect("PNG media fixture should be written");
+
+        let attach_response = attach_media_file_from_path_with_state(
+            task_id.clone(),
+            UploadedMediaPathInput {
+                file_path: media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect("path-attached PNG media should attach");
+        let media_file = attach_response
+            .media_file
+            .expect("path-attached PNG metadata should be returned");
+        assert_eq!(media_file.file_name, "path-after-iend-carrier.png");
+        assert_eq!(media_file.file_size_bytes, carrier_bytes.len() as u64);
+        assert_eq!(media_file.file_type, "image/png");
+
+        let result =
+            analyze_task_with_state(task_id.clone(), &state).expect("PNG analysis should run");
+        let stored_files = get_extracted_files_with_state(task_id.clone(), &state)
+            .expect("stored path-attached PNG metadata should be readable");
+        assert_eq!(result.extracted_files, stored_files);
+        assert_eq!(stored_files.len(), 1);
+
+        let file = stored_files
+            .iter()
+            .find(|file| file.file_name == "path-after-iend-note.pdf")
+            .expect("path-attached PNG after-IEND packet payload should be extracted");
+
+        assert!(file.id.starts_with("payload-"));
+        assert_eq!(file.analyzer_name, "png-container-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.file_size_bytes, secret.len() as u64);
+        assert_eq!(file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(file.validation_status, ValidationStatus::Verified);
+
+        let target_path = temp_dir.path().join("downloads").join("after-iend.pdf");
+        download_extracted_file_with_state(
+            task_id,
+            file.id.clone(),
+            target_path
+                .to_str()
+                .expect("target path should be utf-8")
+                .to_string(),
+            &state,
+        )
+        .expect("path-attached after-IEND payload should download");
+        assert_eq!(
+            fs::read(&target_path).expect("downloaded payload should be readable"),
+            secret
+        );
+    }
+
+    #[test]
     fn analyze_task_command_test_rejects_missing_task_or_media() {
         let state = AppState::default();
         let task =
@@ -1927,6 +1992,12 @@ mod tests {
         let iend_chunk_offset = iend_type_offset - 4;
         bytes.splice(iend_chunk_offset..iend_chunk_offset, inserted_chunks);
 
+        bytes
+    }
+
+    fn png_with_after_iend_payload(payload: &[u8]) -> Vec<u8> {
+        let mut bytes = png_image_bytes();
+        bytes.extend_from_slice(payload);
         bytes
     }
 

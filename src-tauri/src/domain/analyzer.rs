@@ -2226,6 +2226,47 @@ mod tests {
     }
 
     #[test]
+    fn png_container_analyzer_preserves_distinct_same_name_packets_after_iend() {
+        let first_secret: &[u8] = b"%PDF-1.7\nfirst after-IEND duplicate\n%%EOF\n";
+        let second_secret: &[u8] = b"%PDF-1.7\nsecond after-IEND duplicate\n%%EOF\n";
+        let first_packet = stegascope_packet("shared_png_note.pdf", first_secret);
+        let second_packet = stegascope_packet("shared_png_note.pdf", second_secret);
+        let mut after_iend = Vec::new();
+        after_iend.extend_from_slice(&first_packet);
+        after_iend.extend_from_slice(&second_packet);
+        let bytes = png_with_after_iend_payload(&after_iend);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = PngContainerAnalyzer::default().analyze(&media).unwrap();
+        let shared_payloads = outcome
+            .extracted_payloads
+            .iter()
+            .filter(|payload| payload.file.file_name == "shared_png_note.pdf")
+            .collect::<Vec<_>>();
+
+        assert_eq!(shared_payloads.len(), 2);
+        assert_ne!(shared_payloads[0].file.id, shared_payloads[1].file.id);
+        assert!(shared_payloads
+            .iter()
+            .all(|payload| payload.file.analyzer_name == "png-container-analyzer"));
+        assert!(shared_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(shared_payloads
+            .iter()
+            .all(|payload| payload.file.validation_status == ValidationStatus::Verified));
+        assert!(shared_payloads
+            .iter()
+            .any(|payload| payload.bytes == first_secret));
+        assert!(shared_payloads
+            .iter()
+            .any(|payload| payload.bytes == second_secret));
+    }
+
+    #[test]
     fn png_container_analyzer_prefers_verified_packet_after_iend_over_signature_candidates() {
         let secret = b"\x89PNG\r\n\x1A\nverified-after-iend-blueprint";
         let packet = stegascope_packet("after_iend_blueprint.png", secret);

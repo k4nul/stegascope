@@ -39,7 +39,8 @@ extraction behavior, including:
   `IEND` terminator is present.
 - Compressed PNG `zTXt`/`iTXt` metadata payload extraction.
 - PNG after-IEND packet and signature candidate extraction, including invalid
-  packet fallback to signature evidence and invalid `IEND` CRC rejection.
+  packet fallback to signature evidence, same-name verified packet
+  preservation, and invalid `IEND` CRC rejection.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   invalid signature decoy recovery, non-payload marker segment exclusion,
@@ -66,10 +67,11 @@ extraction behavior, including:
 There are initial command-level Rust tests for create, byte-input attach,
 path-based attach, invalid attach/analyze inputs, stale-task attach rejection
 before media loader validation or local path inspection, path-based reattach
-result clearing, path-attached JPEG segment and after-EOI analysis/download, analyze,
-list-extracted-files success and missing-task rejection, download command flow,
-malformed download request rejection, and same-name payload download
-disambiguation for PNG metadata and JPEG segment carriers.
+result clearing, path-attached PNG after-IEND plus JPEG segment and after-EOI
+analysis/download, analyze, list-extracted-files success and missing-task
+rejection, download command flow, malformed download request rejection, and
+same-name payload download disambiguation for PNG metadata and JPEG segment
+carriers.
 There are no frontend tests, negative-path command-level Rust tests for every
 Tauri command, or end-to-end desktop workflow tests yet.
 
