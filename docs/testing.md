@@ -49,10 +49,12 @@ extraction behavior, including:
   before segment payload extraction, malformed segment and non-marker header byte
   safety, non-JPEG/truncated input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
-  decoy isolation including length-shaped false-EOI decoys, byte-stuffed SOS
-  EOI isolation, SOS restart/fill marker isolation, malformed SOS marker recovery,
-  malformed SOS false-EOI length recovery, post-SOS marker-segment skipping,
-  and after-EOI evidence labeling, including multiple verified packets after
+  decoy isolation including length-shaped false-EOI decoys and recovery when a
+  length-looking nested SOI decoy would otherwise skip the structural EOI,
+  byte-stuffed SOS EOI isolation, SOS restart/fill marker isolation, malformed
+  SOS marker recovery, malformed SOS false-EOI length recovery,
+  post-SOS marker-segment skipping, and after-EOI evidence labeling, including
+  multiple verified packets after
   EOI, invalid after-EOI packet fallback, same-name packet preservation across
   multiple segments and segment/after-EOI channels, verified segment packet
   preference over after-EOI signature fallback candidates, and verified

@@ -1048,7 +1048,14 @@ fn skip_nested_jpeg_scan_decoy(bytes: &[u8], offset: usize) -> usize {
         return offset + JPEG_EOI.len();
     }
 
-    if let Some((_, data_end)) = jpeg_segment_data_bounds(bytes, offset) {
+    if let Some((data_start, data_end)) = jpeg_segment_data_bounds(bytes, offset) {
+        if let Some(eoi_offset) = bytes[data_start..data_end]
+            .windows(JPEG_EOI.len())
+            .position(|window| window == JPEG_EOI)
+        {
+            return data_start + eoi_offset + JPEG_EOI.len();
+        }
+
         if bytes
             .get(data_end..)
             .is_some_and(|remaining| remaining.starts_with(JPEG_EOI))
@@ -3296,6 +3303,35 @@ mod tests {
             .extracted_payloads
             .iter()
             .any(|payload| payload.bytes == decoy_payload));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_finds_eoi_after_length_like_scan_soi_decoy() {
+        let after_eoi_payload = b"%PDF-1.7\nactual after length-like SOI decoy\n%%EOF\n";
+        let mut scan_data = b"scan data before length-like nested SOI".to_vec();
+        scan_data.extend_from_slice(JPEG_SOI);
+        scan_data.extend_from_slice(&[0x00, 0x20]);
+        scan_data.extend_from_slice(b"short decoy");
+        scan_data.extend_from_slice(JPEG_EOI);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected actual after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
     }
 
     #[test]
