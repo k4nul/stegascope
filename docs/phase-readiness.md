@@ -563,6 +563,24 @@ Current automation context for this documentation handoff:
   `cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer --no-run`
   failed before project code because Cargo could not resolve
   `index.crates.io` while fetching the `image` crate.
+- July 4, 2026 KST implementation-package validation refresh preserved the
+  existing JPEG container-side-channel package and kept phase state unchanged.
+  `npm run validate:static` passed again with the existing 86 download IPC
+  checks and 254 phase evidence checks. `npm run validate:toolchain-readiness`
+  still reported local setup blockers for missing local `tsc`/`vite` binaries
+  while confirming offline Cargo metadata resolution. The checked-in frontend
+  transition command remained blocked before source checks: `npm run build`
+  reported `sh: 1: tsc: not found`. A bounded setup attempt with
+  `npm ci --ignore-scripts --prefer-offline --no-audit --fund=false --cache /tmp/stegascope-npm-cache`
+  could not install local Node binaries because uncached registry tarballs such
+  as `yallist-3.1.1.tgz`, `vite-7.3.5.tgz`, `typescript-5.8.3.tgz`,
+  `react-19.2.4.tgz`, and `react-dom-19.2.4.tgz` repeatedly failed with
+  `EAI_AGAIN` before npm exited with `Exit handler never called!`. Focused Rust
+  JPEG evidence also remained setup-blocked before project tests:
+  `cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer --offline --no-run`
+  failed because the `tauri` crate was not cached. This blocker-record guard is
+  now covered by `npm run validate:static`, which passes with 86 download IPC
+  checks and 258 phase evidence checks after this refresh.
 
 The next valid phase-transition attempt should begin with successful dependency
 setup and a fresh `npm run build` result.

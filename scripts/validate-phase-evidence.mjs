@@ -527,6 +527,26 @@ expectMatch(
   /July 4, 2026 KST validation-chain handoff refresh[\s\S]*?`cargo test --manifest-path src-tauri\/Cargo\.toml jpeg_segment_analyzer --no-run`\s+failed before project code because Cargo could not resolve\s+`index\.crates\.io` while fetching the `image` crate/,
 );
 expectMatch(
+  "phase readiness records implementation-package validation refresh",
+  phaseReadinessDocs,
+  /July 4, 2026 KST implementation-package validation refresh[\s\S]*?kept phase state unchanged/,
+);
+expectMatch(
+  "phase readiness records refreshed build blocker",
+  phaseReadinessDocs,
+  /July 4, 2026 KST implementation-package validation refresh[\s\S]*?`npm run build`\s+reported `sh: 1: tsc: not found`/,
+);
+expectMatch(
+  "phase readiness records refreshed npm ci registry blocker",
+  phaseReadinessDocs,
+  /`npm ci --ignore-scripts --prefer-offline --no-audit --fund=false --cache \/tmp\/stegascope-npm-cache`[\s\S]*?`EAI_AGAIN`[\s\S]*?`Exit handler never called!`/,
+);
+expectMatch(
+  "phase readiness records refreshed offline JPEG test blocker",
+  phaseReadinessDocs,
+  /`cargo test --manifest-path src-tauri\/Cargo\.toml jpeg_segment_analyzer --offline --no-run`\s+failed because the `tauri` crate was not cached/,
+);
+expectMatch(
   "phase readiness records latest uncached npm blocker",
   phaseReadinessDocs,
   /`npm ci --offline --ignore-scripts --cache \/tmp\/stegascope-npm-cache --no-audit --fund=false`\s+failed because `yallist-3\.1\.1\.tgz` was not cached/,
