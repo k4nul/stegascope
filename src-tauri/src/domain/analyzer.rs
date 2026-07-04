@@ -2741,6 +2741,31 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_continues_past_tem_header_marker() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0xFF, 0x01]);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xE1, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let file = outcome
+            .extracted_files
+            .iter()
+            .find(|file| file.file_name == "jpeg_app1_segment_1_payload_0.pdf")
+            .expect("expected APP1 payload after standalone TEM marker");
+
+        assert_eq!(file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(file.file_type, "application/pdf");
+        assert_eq!(file.suspicious_level, SuspiciousLevel::High);
+        assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_multiple_segments() {
         let first_secret: &[u8] = b"%PDF-1.7\nfirst segmented duplicate\n%%EOF\n";
         let second_secret: &[u8] = b"%PDF-1.7\nsecond segmented duplicate\n%%EOF\n";

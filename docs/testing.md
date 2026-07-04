@@ -43,8 +43,9 @@ extraction behavior, including:
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   invalid signature decoy recovery, non-payload marker segment exclusion,
-  structural EOI requirement before segment payload extraction, malformed
-  segment and non-marker header byte safety, non-JPEG/truncated input safety,
+  standalone TEM header marker handling, structural EOI requirement before
+  segment payload extraction, malformed segment and non-marker header byte
+  safety, non-JPEG/truncated input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation, byte-stuffed SOS EOI isolation, SOS restart/fill marker
   isolation, malformed SOS marker recovery,

@@ -117,6 +117,7 @@
         "jpeg_segment_analyzer_extracts_valid_signature_from_app_segment",
         "jpeg_segment_analyzer_scans_app0_and_app15_boundary_segments",
         "jpeg_segment_analyzer_ignores_non_payload_marker_segments",
+        "jpeg_segment_analyzer_continues_past_tem_header_marker",
         "jpeg_segment_analyzer_prefers_verified_segment_packet_over_after_eoi_signature_candidates",
         "jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads",
         "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",
