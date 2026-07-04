@@ -2578,6 +2578,45 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_skips_corrupt_packet_decoys_before_valid_after_eoi_packet() {
+        let secret = valid_pdf_payload();
+        let packet = stegascope_packet("late_after_eoi_note.pdf", secret);
+        let mut after_eoi = Vec::new();
+
+        for index in 0..3 {
+            let mut decoy = stegascope_packet(
+                &format!("corrupt_after_eoi_note_{index}.pdf"),
+                b"%PDF-1.7\ncorrupt after-EOI decoy payload\n%%EOF\n",
+            );
+            decoy[18] ^= 0xFF;
+            after_eoi.extend_from_slice(&decoy);
+        }
+        after_eoi.extend_from_slice(&packet);
+
+        let bytes = jpeg_with_after_eoi_payload(&after_eoi);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "late_after_eoi_note.pdf")
+            .expect("expected valid JPEG after-EOI packet after corrupt decoys");
+
+        assert_eq!(payload.file.analyzer_name, "jpeg-segment-analyzer");
+        assert_eq!(payload.source, PayloadSource::VerifiedPacket);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Verified);
+        assert_eq!(payload.bytes, secret);
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_labels_post_eoi_data_as_after_eoi_not_segment() {
         let post_eoi_segment = jpeg_segment_bytes(0xE1, valid_pdf_payload());
         let bytes = jpeg_with_after_eoi_payload(&post_eoi_segment);
