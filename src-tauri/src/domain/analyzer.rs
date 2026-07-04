@@ -1016,6 +1016,9 @@ fn jpeg_scan_data_eoi_end(bytes: &[u8], mut offset: usize) -> Option<usize> {
             0x00 => continue,
             0xD9 => return Some(offset),
             0x01 | 0xD0..=0xD7 => continue,
+            0xD8 => {
+                offset = skip_nested_jpeg_scan_decoy(bytes, offset);
+            }
             0xDA => {
                 if let Some((_, scan_data_start)) = jpeg_segment_data_bounds(bytes, offset) {
                     offset = scan_data_start;
@@ -1035,6 +1038,28 @@ fn jpeg_scan_data_eoi_end(bytes: &[u8], mut offset: usize) -> Option<usize> {
     }
 
     None
+}
+
+fn skip_nested_jpeg_scan_decoy(bytes: &[u8], offset: usize) -> usize {
+    if bytes
+        .get(offset..)
+        .is_some_and(|remaining| remaining.starts_with(JPEG_EOI))
+    {
+        return offset + JPEG_EOI.len();
+    }
+
+    if let Some((_, data_end)) = jpeg_segment_data_bounds(bytes, offset) {
+        if bytes
+            .get(data_end..)
+            .is_some_and(|remaining| remaining.starts_with(JPEG_EOI))
+        {
+            return data_end + JPEG_EOI.len();
+        }
+
+        return data_end;
+    }
+
+    skip_malformed_jpeg_segment_length(bytes, offset)
 }
 
 fn skip_malformed_jpeg_segment_length(bytes: &[u8], length_offset: usize) -> usize {
@@ -3173,6 +3198,40 @@ mod tests {
         let after_eoi_payload = b"%PDF-1.7\nactual after-EOI payload\n%%EOF\n";
         let mut scan_data = b"scan data before nested SOI marker".to_vec();
         scan_data.extend_from_slice(JPEG_SOI);
+        scan_data.extend_from_slice(JPEG_EOI);
+        scan_data.extend_from_slice(decoy_payload);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected actual after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == decoy_payload));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_ignores_false_eoi_after_length_shaped_scan_soi_decoy() {
+        let decoy_payload = b"%PDF-1.7\nlength-shaped nested SOI scan decoy\n%%EOF\n";
+        let after_eoi_payload = b"%PDF-1.7\nactual after length-shaped decoy\n%%EOF\n";
+        let mut scan_data = b"scan data before nested SOI marker".to_vec();
+        scan_data.extend_from_slice(JPEG_SOI);
+        scan_data.extend_from_slice(&[0x00, 0x02]);
         scan_data.extend_from_slice(JPEG_EOI);
         scan_data.extend_from_slice(decoy_payload);
         let mut bytes = jpeg_with_sos_scan_data(&scan_data);
