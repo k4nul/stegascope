@@ -43,17 +43,19 @@ extraction behavior, including:
   preservation, and invalid `IEND` CRC rejection.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
-  invalid signature decoy recovery, non-payload marker segment exclusion,
-  standalone TEM header marker handling, structural EOI requirement before
-  segment payload extraction, malformed segment and non-marker header byte
-  safety, non-JPEG/truncated input safety,
+  invalid signature decoy recovery, non-payload marker segment exclusion and
+  continuation, marker fill-byte tolerance, standalone TEM header marker
+  handling, structural EOI requirement before segment payload extraction,
+  malformed segment and non-marker header byte safety, non-JPEG/truncated input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation including length-shaped false-EOI decoys, byte-stuffed SOS
   EOI isolation, SOS restart/fill marker isolation, malformed SOS marker recovery,
   malformed SOS false-EOI length recovery, post-SOS marker-segment skipping,
   and after-EOI evidence labeling, including multiple verified packets after
-  EOI, same-name packet preservation across segment and after-EOI channels, and
-  verified packet preference over after-EOI signature fallback candidates.
+  EOI, invalid after-EOI packet fallback, same-name packet preservation across
+  multiple segments and segment/after-EOI channels, verified segment packet
+  preference over after-EOI signature fallback candidates, and verified
+  after-EOI packet preference over segment signature fallback candidates.
 - Container side-channel boundaries, including metadata chunks after structural
   PNG `IEND`, invalid or missing PNG `IEND` terminators, JPEG marker-like bytes
   after structural EOI, and same-name distinct payload preservation.
