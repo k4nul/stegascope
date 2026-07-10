@@ -347,9 +347,9 @@ expectMatch(
   /attachMediaFile\(\s*activeTab\.taskId,\s+selectedPath\s*\)/,
 );
 expectMatch(
-  "Rust command bounds local media reads inside command boundary",
+  "Rust command bounds the opened local media file inside command boundary",
   rustCommandSource,
-  /validate_media_file_size\(metadata\.len\(\)\)\?;[\s\S]*?fs::File::open\(&path\)[\s\S]*?\.take\(MAX_MEDIA_FILE_BYTES \+ 1\)[\s\S]*?\.read_to_end\(&mut bytes\)/,
+  /fs::File::open\(&path\)[\s\S]*?file\s*\.metadata\(\)[\s\S]*?validate_media_file_size\(metadata\.len\(\)\)\?;[\s\S]*?\.take\(MAX_MEDIA_FILE_BYTES \+ 1\)[\s\S]*?\.read_to_end\(&mut bytes\)/,
 );
 expectMatch(
   "Rust command test covers local path attach boundary",

@@ -200,13 +200,6 @@ fn attach_media_file_from_path_with_state(
     ensure_task_exists(&task_id, state)?;
 
     let path = PathBuf::from(input.file_path.trim());
-    let metadata =
-        fs::metadata(&path).map_err(|error| format!("failed to inspect media file: {error}"))?;
-    if !metadata.is_file() {
-        return Err("media path is not a file".to_string());
-    }
-    validate_media_file_size(metadata.len())?;
-
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
@@ -214,6 +207,13 @@ fn attach_media_file_from_path_with_state(
         .to_string();
     let mut file =
         fs::File::open(&path).map_err(|error| format!("failed to read media file: {error}"))?;
+    let metadata = file
+        .metadata()
+        .map_err(|error| format!("failed to inspect media file: {error}"))?;
+    if !metadata.is_file() {
+        return Err("media path is not a file".to_string());
+    }
+    validate_media_file_size(metadata.len())?;
     let mut bytes = Vec::new();
     file.take(MAX_MEDIA_FILE_BYTES + 1)
         .read_to_end(&mut bytes)
