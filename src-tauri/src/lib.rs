@@ -8,7 +8,7 @@ use std::sync::{Mutex, MutexGuard};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use domain::{
-    create_loader, default_analyzers, ExtractedFile, MediaFileInfo, SuspiciousLevel, Task,
+    create_loader, extract_payload_candidates, ExtractedFile, MediaFileInfo, SuspiciousLevel, Task,
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
@@ -279,13 +279,8 @@ fn analyze_task_with_state(
         .ok_or_else(|| "task does not have a media file attached".to_string())?
         .load()
         .map_err(|error| error.to_string())?;
-    let mut extracted_payloads = Vec::new();
-    for analyzer in default_analyzers() {
-        let outcome = analyzer
-            .analyze(&media)
-            .map_err(|error| error.to_string())?;
-        extracted_payloads.extend(outcome.extracted_payloads);
-    }
+    let extracted_payloads =
+        extract_payload_candidates(&media).map_err(|error| error.to_string())?;
 
     task.clear_extracted_files();
     task.replace_extracted_payloads(extracted_payloads);
