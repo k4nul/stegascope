@@ -349,22 +349,30 @@ fn download_extracted_file_with_state(
     validate_required(&target_path, "save path")?;
     let file_id = file_id.trim();
 
-    let tasks = lock_tasks(&state)?;
-    let task = tasks
-        .get(task_id.trim())
-        .ok_or_else(|| format!("task not found: {}", task_id.trim()))?;
-    let payload = task
-        .extracted_payloads()
-        .iter()
-        .find(|payload| payload.file.id == file_id)
-        .ok_or_else(|| {
-            format!("extracted file bytes not found in current analysis result: {file_id}")
-        })?;
-    let saved_path = save_downloaded_payload(&target_path, &payload.bytes)?;
+    let (file_name, file_type, bytes) = {
+        let tasks = lock_tasks(&state)?;
+        let task = tasks
+            .get(task_id.trim())
+            .ok_or_else(|| format!("task not found: {}", task_id.trim()))?;
+        let payload = task
+            .extracted_payloads()
+            .iter()
+            .find(|payload| payload.file.id == file_id)
+            .ok_or_else(|| {
+                format!("extracted file bytes not found in current analysis result: {file_id}")
+            })?;
+
+        (
+            payload.file.file_name.clone(),
+            payload.file.file_type.clone(),
+            payload.bytes.clone(),
+        )
+    };
+    let saved_path = save_downloaded_payload(&target_path, &bytes)?;
 
     Ok(DownloadExtractedFileResponse {
-        file_name: payload.file.file_name.clone(),
-        file_type: payload.file.file_type.clone(),
+        file_name,
+        file_type,
         saved_path: saved_path.display().to_string(),
     })
 }
