@@ -152,7 +152,7 @@ payload bytes to the selected path. A payload identifier is accepted only when
 the matching payload exists in the running task's current analysis result; it is
 not a durable case artifact ID or a per-run nonce. If two extracted rows share
 the same displayed file name, select distinct save paths when exporting both
-rows; writing to the same path follows normal filesystem overwrite behavior.
+rows. Existing target files are not overwritten; the export fails instead.
 
 ## Release Build Fails
 
