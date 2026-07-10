@@ -166,17 +166,12 @@ fn attach_media_file_with_state(
 
     ensure_task_exists(&task_id, state)?;
 
-    let file_size_bytes = if input.file_size_bytes == 0 {
-        input.bytes.len() as u64
-    } else {
-        input.file_size_bytes
-    };
     let file_type = normalize_media_type(&input.file_name, &input.file_type);
 
     attach_media_bytes_with_state(
         &task_id,
         &input.file_name,
-        file_size_bytes,
+        input.bytes.len() as u64,
         file_type,
         input.bytes,
         state,
@@ -219,7 +214,7 @@ fn attach_media_file_from_path_with_state(
     attach_media_bytes_with_state(
         &task_id,
         &file_name,
-        metadata.len(),
+        bytes.len() as u64,
         file_type,
         bytes,
         state,
@@ -675,7 +670,7 @@ mod tests {
     }
 
     #[test]
-    fn attach_media_file_command_test_attaches_media_and_normalizes_type() {
+    fn attach_media_file_command_test_uses_attached_bytes_for_media_size() {
         let state = AppState::default();
         let task =
             create_task_with_state(sample_task_input(), &state).expect("task should be created");
@@ -685,7 +680,7 @@ mod tests {
             task.task_id,
             UploadedMediaInput {
                 file_name: "carrier.png".to_string(),
-                file_size_bytes: 0,
+                file_size_bytes: 1,
                 file_type: String::new(),
                 bytes: png_bytes.clone(),
             },
