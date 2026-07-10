@@ -293,6 +293,7 @@ for (const evidence of [
   "jpeg_segment_analyzer_continues_past_non_payload_marker_segments",
   "jpeg_segment_analyzer_handles_fill_bytes_between_header_markers",
   "jpeg_segment_analyzer_continues_past_tem_header_marker",
+  "jpeg_segment_analyzer_rejects_restart_marker_before_sos",
   "jpeg_segment_analyzer_prefers_verified_segment_packet_over_after_eoi_signature_candidates",
   "jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads",
   "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",

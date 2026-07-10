@@ -914,7 +914,7 @@ fn jpeg_payload_segments(bytes: &[u8]) -> Vec<JpegSegment<'_>> {
             break;
         }
 
-        if jpeg_marker_has_no_payload(marker.marker) {
+        if jpeg_header_marker_has_no_payload(marker.marker) {
             offset = marker.payload_offset;
             continue;
         }
@@ -1012,7 +1012,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
                 return jpeg_scan_data_eoi_end(bytes, scan_data_start);
             }
-            marker if jpeg_marker_has_no_payload(marker) => {
+            marker if jpeg_header_marker_has_no_payload(marker) => {
                 offset = marker.payload_offset;
             }
             _ => {
@@ -1057,7 +1057,7 @@ fn jpeg_scan_data_eoi_end(bytes: &[u8], mut offset: usize) -> Option<usize> {
                     offset = skip_malformed_jpeg_segment_length(bytes, offset);
                 }
             }
-            marker if jpeg_marker_has_no_payload(marker) => continue,
+            marker if jpeg_header_marker_has_no_payload(marker) => continue,
             _ => {
                 if let Some((_, data_end)) = jpeg_segment_data_bounds(bytes, offset) {
                     offset = data_end;
@@ -1107,8 +1107,8 @@ fn skip_malformed_jpeg_segment_length(bytes: &[u8], length_offset: usize) -> usi
         .unwrap_or(bytes.len())
 }
 
-fn jpeg_marker_has_no_payload(marker: u8) -> bool {
-    marker == 0x01 || (0xD0..=0xD7).contains(&marker)
+fn jpeg_header_marker_has_no_payload(marker: u8) -> bool {
+    marker == 0x01
 }
 
 fn is_jpeg_payload_segment(marker: u8) -> bool {
@@ -2958,6 +2958,24 @@ mod tests {
         assert_eq!(file.file_type, "application/pdf");
         assert_eq!(file.suspicious_level, SuspiciousLevel::High);
         assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_restart_marker_before_sos() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0xFF, 0xD0]);
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
     }
 
     #[test]
