@@ -1599,7 +1599,7 @@ fn validate_image_payload(bytes: &[u8], label: &str) -> Option<String> {
 }
 
 fn validate_pdf_payload(bytes: &[u8]) -> Option<String> {
-    if bytes.starts_with(b"%PDF-") && find_signature_offsets(bytes, b"%%EOF").first().is_some() {
+    if bytes.starts_with(b"%PDF-") && find_signature_offsets(bytes, b"%%EOF").next().is_some() {
         Some("PDF header and EOF marker found".to_string())
     } else {
         None
@@ -1609,10 +1609,10 @@ fn validate_pdf_payload(bytes: &[u8]) -> Option<String> {
 fn validate_zip_payload(bytes: &[u8]) -> Option<String> {
     if bytes.starts_with(b"PK\x03\x04")
         && (find_signature_offsets(bytes, b"PK\x05\x06")
-            .first()
+            .next()
             .is_some()
             || find_signature_offsets(bytes, b"PK\x06\x06")
-                .first()
+                .next()
                 .is_some())
     {
         Some("ZIP local header and central directory marker found".to_string())
@@ -1777,16 +1777,39 @@ fn header_hex(bytes: &[u8]) -> String {
         .join(" ")
 }
 
-fn find_signature_offsets(bytes: &[u8], signature: &[u8]) -> Vec<usize> {
-    if signature.is_empty() || bytes.len() < signature.len() {
-        return Vec::new();
-    }
+struct SignatureOffsets<'a, 'b> {
+    bytes: &'a [u8],
+    signature: &'b [u8],
+    next_offset: usize,
+}
 
-    bytes
-        .windows(signature.len())
-        .enumerate()
-        .filter_map(|(offset, window)| (window == signature).then_some(offset))
-        .collect()
+impl Iterator for SignatureOffsets<'_, '_> {
+    type Item = usize;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.signature.is_empty() || self.signature.len() > self.bytes.len() {
+            return None;
+        }
+
+        let last_offset = self.bytes.len() - self.signature.len();
+        while self.next_offset <= last_offset {
+            let offset = self.next_offset;
+            self.next_offset += 1;
+            if self.bytes[offset..].starts_with(self.signature) {
+                return Some(offset);
+            }
+        }
+
+        None
+    }
+}
+
+fn find_signature_offsets(bytes: &[u8], signature: &[u8]) -> SignatureOffsets<'_, '_> {
+    SignatureOffsets {
+        bytes,
+        signature,
+        next_offset: 0,
+    }
 }
 
 fn media_header_guard(file_type: &str) -> usize {
@@ -1810,6 +1833,13 @@ mod tests {
 
     use flate2::{write::ZlibEncoder, Compression};
     use image::ImageEncoder;
+
+    #[test]
+    fn signature_offsets_yields_overlapping_matches_in_order() {
+        let offsets = find_signature_offsets(b"ABABA", b"ABA").collect::<Vec<_>>();
+
+        assert_eq!(offsets, vec![0, 2]);
+    }
 
     #[test]
     fn lsb_analyzer_extracts_known_file_signature_from_image_lsb_stream() {
