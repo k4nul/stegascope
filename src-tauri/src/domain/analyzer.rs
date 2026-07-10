@@ -245,6 +245,7 @@ impl FileAnalyzer for EmbeddedSignatureAnalyzer {
 }
 
 const MAX_LSB_BYTES_TO_SCAN: usize = 2 * 1024 * 1024;
+const MAX_LSB_BITS_TO_SCAN: usize = MAX_LSB_BYTES_TO_SCAN * 8;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum BitPacking {
@@ -507,11 +508,15 @@ impl FileAnalyzer for WavPcmLsbAnalyzer {
 }
 
 fn extract_rgb_lsb_bits(image: &image::RgbaImage) -> Vec<u8> {
-    let mut bits = Vec::with_capacity(image.width() as usize * image.height() as usize * 3);
+    let bit_capacity = (image.width() as usize)
+        .saturating_mul(image.height() as usize)
+        .saturating_mul(3)
+        .min(MAX_LSB_BITS_TO_SCAN);
+    let mut bits = Vec::with_capacity(bit_capacity);
 
     for pixel in image.pixels() {
-        for channel in &pixel.0[..3] {
-            bits.push(*channel & 1);
+        if append_lsb_bits(&mut bits, pixel.0[..3].iter().map(|channel| *channel & 1)) {
+            return bits;
         }
     }
 
@@ -531,33 +536,41 @@ fn extract_lsb2bpp_bits(image: &image::RgbaImage, strategy: Lsb2bppStrategy) -> 
         | Lsb2bppStrategy::Matrix2x3Bgr => 2,
         Lsb2bppStrategy::ChannelLowHigh | Lsb2bppStrategy::ChannelHighLow => 6,
     };
-    let mut bits =
-        Vec::with_capacity(image.width() as usize * image.height() as usize * bits_per_pixel);
+    let bit_capacity = (image.width() as usize)
+        .saturating_mul(image.height() as usize)
+        .saturating_mul(bits_per_pixel)
+        .min(MAX_LSB_BITS_TO_SCAN);
+    let mut bits = Vec::with_capacity(bit_capacity);
 
     for pixel in image.pixels() {
         match strategy {
             Lsb2bppStrategy::RgPixel => {
-                bits.push(pixel.0[0] & 1);
-                bits.push(pixel.0[1] & 1);
+                if append_lsb_bits(&mut bits, [pixel.0[0] & 1, pixel.0[1] & 1]) {
+                    return bits;
+                }
             }
             Lsb2bppStrategy::RbPixel => {
-                bits.push(pixel.0[0] & 1);
-                bits.push(pixel.0[2] & 1);
+                if append_lsb_bits(&mut bits, [pixel.0[0] & 1, pixel.0[2] & 1]) {
+                    return bits;
+                }
             }
             Lsb2bppStrategy::GbPixel => {
-                bits.push(pixel.0[1] & 1);
-                bits.push(pixel.0[2] & 1);
+                if append_lsb_bits(&mut bits, [pixel.0[1] & 1, pixel.0[2] & 1]) {
+                    return bits;
+                }
             }
             Lsb2bppStrategy::ChannelLowHigh => {
                 for channel in &pixel.0[..3] {
-                    bits.push(*channel & 1);
-                    bits.push((*channel >> 1) & 1);
+                    if append_lsb_bits(&mut bits, [*channel & 1, (*channel >> 1) & 1]) {
+                        return bits;
+                    }
                 }
             }
             Lsb2bppStrategy::ChannelHighLow => {
                 for channel in &pixel.0[..3] {
-                    bits.push((*channel >> 1) & 1);
-                    bits.push(*channel & 1);
+                    if append_lsb_bits(&mut bits, [(*channel >> 1) & 1, *channel & 1]) {
+                        return bits;
+                    }
                 }
             }
             Lsb2bppStrategy::Matrix2x3Rgb
@@ -571,8 +584,9 @@ fn extract_lsb2bpp_bits(image: &image::RgbaImage, strategy: Lsb2bppStrategy) -> 
                     let b1 = pixel.0[second] & 1;
                     let b2 = pixel.0[third] & 1;
 
-                    bits.push(b0 ^ b1);
-                    bits.push(b1 ^ b2);
+                    if append_lsb_bits(&mut bits, [b0 ^ b1, b1 ^ b2]) {
+                        return bits;
+                    }
                 }
             }
         }
@@ -668,16 +682,32 @@ fn extract_wav_pcm_lsb_bits(wav: WavPcmData<'_>) -> Vec<u8> {
     let block_align = usize::from(wav.format.block_align);
     let channels = usize::from(wav.format.channels);
     let frame_count = wav.data.len() / block_align;
-    let mut bits = Vec::with_capacity(frame_count * channels);
+    let bit_capacity = frame_count
+        .saturating_mul(channels)
+        .min(MAX_LSB_BITS_TO_SCAN);
+    let mut bits = Vec::with_capacity(bit_capacity);
 
     for frame in wav.data.chunks_exact(block_align) {
         for channel in 0..channels {
             let sample_offset = channel * bytes_per_sample;
-            bits.push(frame[sample_offset] & 1);
+            if append_lsb_bits(&mut bits, [frame[sample_offset] & 1]) {
+                return bits;
+            }
         }
     }
 
     bits
+}
+
+fn append_lsb_bits(bits: &mut Vec<u8>, values: impl IntoIterator<Item = u8>) -> bool {
+    for value in values {
+        bits.push(value);
+        if bits.len() == MAX_LSB_BITS_TO_SCAN {
+            return true;
+        }
+    }
+
+    false
 }
 
 fn read_u16_le(bytes: &[u8], offset: usize) -> Option<u16> {
@@ -1833,6 +1863,15 @@ mod tests {
 
     use flate2::{write::ZlibEncoder, Compression};
     use image::ImageEncoder;
+
+    #[test]
+    fn append_lsb_bits_stops_at_the_analysis_scan_limit() {
+        let mut bits = vec![0; MAX_LSB_BITS_TO_SCAN - 1];
+
+        assert!(append_lsb_bits(&mut bits, [1, 0]));
+        assert_eq!(bits.len(), MAX_LSB_BITS_TO_SCAN);
+        assert_eq!(bits.last(), Some(&1));
+    }
 
     #[test]
     fn signature_offsets_yields_overlapping_matches_in_order() {
