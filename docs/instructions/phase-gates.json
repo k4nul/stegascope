@@ -143,6 +143,7 @@
         "jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_multiple_segments",
         "jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_segment_and_after_eoi",
         "jpeg_segment_analyzer_rejects_nested_soi_marker_before_payloads",
+        "jpeg_segment_analyzer_rejects_length_shaped_nested_soi_marker_before_payloads",
         "jpeg_segment_analyzer_rejects_non_marker_header_bytes_before_payloads",
         "jpeg_segment_analyzer_handles_malformed_segment_lengths",
         "jpeg_segment_analyzer_returns_empty_for_non_jpeg_and_truncated_inputs",

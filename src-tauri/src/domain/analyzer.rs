@@ -1007,6 +1007,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
     while let Some(marker) = next_jpeg_marker(bytes, offset) {
         match marker.marker {
             0xD9 => return Some(marker.payload_offset),
+            0xD8 => return None,
             0xDA => {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
                 return jpeg_scan_data_eoi_end(bytes, scan_data_start);
@@ -3449,6 +3450,26 @@ mod tests {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(JPEG_SOI);
         bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_length_shaped_nested_soi_marker_before_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0x00, 0x02]);
         bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
         bytes.extend_from_slice(JPEG_EOI);
         bytes.extend_from_slice(valid_pdf_payload());
