@@ -7,7 +7,7 @@ unless a product direction has been documented first.
 ## Local Setup
 
 ```bash
-npm install
+npm ci
 npm run build
 cargo check --manifest-path src-tauri/Cargo.toml
 cargo test --manifest-path src-tauri/Cargo.toml
