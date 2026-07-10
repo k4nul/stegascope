@@ -5,7 +5,6 @@ import {
   attachMediaFile,
   createTask,
   downloadExtractedFile,
-  getExtractedFiles,
   type AnalysisResultResponse,
   type ExtractedFile,
   type MediaFileInfo,
@@ -281,12 +280,11 @@ function App() {
 
     try {
       const result = await analyzeTask(activeTab.taskId);
-      const extractedFiles = await getExtractedFiles(activeTab.taskId);
 
       patchTab(activeTab.id, {
         phase: "done",
-        result: { ...result, extractedFiles },
-        extractedFiles,
+        result,
+        extractedFiles: result.extractedFiles,
         error: null,
       });
     } catch (error) {
