@@ -1,8 +1,8 @@
 pub mod domain;
 
 use std::collections::HashMap;
-use std::fs;
-use std::io::Read;
+use std::fs::{self, OpenOptions};
+use std::io::{Read, Write};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -449,7 +449,14 @@ fn save_downloaded_payload(target_path: &str, bytes: &[u8]) -> Result<PathBuf, S
         }
     }
 
-    fs::write(&path, bytes).map_err(|error| format!("failed to save extracted file: {error}"))?;
+    let mut destination = OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&path)
+        .map_err(|error| format!("failed to save extracted file: {error}"))?;
+    destination
+        .write_all(bytes)
+        .map_err(|error| format!("failed to save extracted file: {error}"))?;
 
     Ok(path)
 }
@@ -567,6 +574,25 @@ mod tests {
         assert_eq!(
             fs::read(&saved_path).expect("saved payload should be readable"),
             b"hidden payload"
+        );
+    }
+
+    #[test]
+    fn save_downloaded_payload_rejects_existing_file_without_overwriting() {
+        let temp_dir = TempDir::new("rejects-existing-payload");
+        let target_path = temp_dir.path().join("payload.bin");
+        fs::write(&target_path, b"existing payload").expect("existing payload should be written");
+
+        let error = save_downloaded_payload(
+            target_path.to_str().expect("target path should be utf-8"),
+            b"replacement payload",
+        )
+        .expect_err("existing payload should not be overwritten");
+
+        assert!(error.starts_with("failed to save extracted file:"));
+        assert_eq!(
+            fs::read(&target_path).expect("existing payload should remain readable"),
+            b"existing payload"
         );
     }
 

@@ -96,7 +96,8 @@ file type, payload source, and recovered bytes, so same-name payloads remain
 independently selectable. The frontend requests a download by task ID, payload
 identifier, and target path. Rust accepts the identifier only when a matching
 payload exists in the task's current analysis result, creates parent directories
-when needed, and writes the exact recovered bytes to disk. Payload identifiers
+when needed, and writes the exact recovered bytes to a new destination without
+overwriting an existing file. Payload identifiers
 are not stable external artifact IDs or per-run nonces; an identical payload
 identity can produce the same ID in a later analysis.
 
