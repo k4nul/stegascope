@@ -851,7 +851,7 @@ mod tests {
         )
         .expect_err("missing media path should be rejected");
         assert!(
-            missing_path_error.starts_with("failed to inspect media file:"),
+            missing_path_error.starts_with("failed to read media file:"),
             "unexpected missing path error: {missing_path_error}"
         );
 
