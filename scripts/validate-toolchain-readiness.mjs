@@ -57,7 +57,7 @@ const addManifestScriptCheck = (manifest, scriptName, expected) => {
   });
 };
 
-const addCargoMetadataCheck = () => {
+const addCargoDependencyResolutionCheck = () => {
   const result = spawnSync(
     process.env.CARGO ?? "cargo",
     [
@@ -66,7 +66,6 @@ const addCargoMetadataCheck = () => {
       "src-tauri/Cargo.toml",
       "--locked",
       "--offline",
-      "--no-deps",
       "--format-version=1",
     ],
     {
@@ -83,10 +82,10 @@ const addCargoMetadataCheck = () => {
 
   if (result.status === 0) {
     addCheck({
-      id: "cargo-metadata-offline",
-      label: "offline Cargo metadata",
+      id: "cargo-dependency-resolution-offline",
+      label: "offline Cargo dependency resolution",
       status: "pass",
-      detail: "cargo metadata resolved the locked graph offline",
+      detail: "cargo metadata resolved the locked dependency graph offline",
       action:
         "Restore Cargo cache/network access before treating Rust checks as source failures.",
     });
@@ -97,10 +96,12 @@ const addCargoMetadataCheck = () => {
     const action =
       result.error.code === "ENOENT"
         ? "Install Cargo/Rust tooling before running Rust validation."
+        : result.error.code === "EPERM"
+          ? "Allow Cargo dependency resolution in this environment before running Rust validation."
         : "Make the Cargo executable accessible in this environment before running Rust validation.";
     addCheck({
-      id: "cargo-metadata-offline",
-      label: "offline Cargo metadata",
+      id: "cargo-dependency-resolution-offline",
+      label: "offline Cargo dependency resolution",
       status: "blocker",
       detail: result.error.message,
       action,
@@ -109,12 +110,12 @@ const addCargoMetadataCheck = () => {
   }
 
   addCheck({
-    id: "cargo-metadata-offline",
-    label: "offline Cargo metadata",
+    id: "cargo-dependency-resolution-offline",
+    label: "offline Cargo dependency resolution",
     status: "blocker",
     detail: output ?? `cargo metadata exited with ${result.status}`,
     action:
-      "Restore Cargo cache/network access before treating Rust checks as source failures.",
+      "Restore the locked Cargo registry data or network access before running Rust validation.",
   });
 };
 
@@ -166,7 +167,7 @@ for (const dependencyPath of ["node_modules/typescript", "node_modules/vite"]) {
 
 addLocalBinCheck("tsc", "Run npm ci, then rerun npm run build.");
 addLocalBinCheck("vite", "Run npm ci, then rerun npm run build.");
-addCargoMetadataCheck();
+addCargoDependencyResolutionCheck();
 
 const blockers = checks.filter((check) => check.status === "blocker");
 const result = {

@@ -53,7 +53,8 @@ npm run validate:toolchain-readiness
 
 `npm run validate:toolchain-readiness` checks the local `tsc` and `vite`
 binaries used by `npm run build`, confirms the checked-in lockfiles still exist,
-and runs offline Cargo metadata resolution. A blocker from this preflight means
+and verifies offline Cargo metadata resolution plus locked dependency resolution.
+A blocker from this preflight means
 the local toolchain or dependency cache is not ready; it is not phase-transition
 evidence and should not change phase state.
 
