@@ -347,9 +347,9 @@ expectMatch(
   /attachMediaFile\(\s*activeTab\.taskId,\s+selectedPath\s*\)/,
 );
 expectMatch(
-  "Rust command reads local media path inside command boundary",
+  "Rust command bounds local media reads inside command boundary",
   rustCommandSource,
-  /fs::read\(&path\)/,
+  /validate_media_file_size\(metadata\.len\(\)\)\?;[\s\S]*?fs::File::open\(&path\)[\s\S]*?\.take\(MAX_MEDIA_FILE_BYTES \+ 1\)[\s\S]*?\.read_to_end\(&mut bytes\)/,
 );
 expectMatch(
   "Rust command test covers local path attach boundary",
@@ -592,7 +592,7 @@ expectMatch(
 expectMatch(
   "architecture docs describe Rust-owned local file attach boundary",
   architectureDocs,
-  /frontend attach flow uses the Tauri dialog plugin[\s\S]*?sends that path to Rust through `attach_media_file_from_path`[\s\S]*?Rust reads the file bytes/,
+  /frontend attach flow uses the Tauri dialog plugin[\s\S]*?sends that path to Rust through `attach_media_file_from_path`[\s\S]*?Rust (?:reads the file bytes|rejects files over 128 MiB before bounded reading)/,
 );
 expectMatch(
   "architecture docs list current analyzer registry",

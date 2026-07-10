@@ -238,7 +238,7 @@ Add these before treating the app as a stable MVP:
 - Frontend tests for task creation, media attachment, analyze button state,
   result rendering, error banners, and download dialog behavior.
 - Broader test fixtures for supported media classes and known payload examples.
-- Additional hardening for large media files, including removing the legacy
-  byte-input attach command once no compatibility caller needs it. The current
-  path-based attach boundary is summarized in
+- The path-based attach command rejects files over 128 MiB before reading them.
+  The legacy byte-input attach command still needs removal once no compatibility
+  caller needs it. The current path-based attach boundary is summarized in
   [Architecture Notes](architecture.md).

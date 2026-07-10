@@ -2,6 +2,7 @@ pub mod domain;
 
 use std::collections::HashMap;
 use std::fs;
+use std::io::Read;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Mutex, MutexGuard};
@@ -12,6 +13,8 @@ use domain::{
 };
 use serde::{Deserialize, Serialize};
 use tauri::State;
+
+const MAX_MEDIA_FILE_BYTES: u64 = 128 * 1024 * 1024;
 
 struct AppState {
     tasks: Mutex<HashMap<String, Task>>,
@@ -202,13 +205,20 @@ fn attach_media_file_from_path_with_state(
     if !metadata.is_file() {
         return Err("media path is not a file".to_string());
     }
+    validate_media_file_size(metadata.len())?;
 
     let file_name = path
         .file_name()
         .and_then(|name| name.to_str())
         .ok_or_else(|| "media file name is invalid".to_string())?
         .to_string();
-    let bytes = fs::read(&path).map_err(|error| format!("failed to read media file: {error}"))?;
+    let mut file =
+        fs::File::open(&path).map_err(|error| format!("failed to read media file: {error}"))?;
+    let mut bytes = Vec::new();
+    file.take(MAX_MEDIA_FILE_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("failed to read media file: {error}"))?;
+    validate_media_file_size(bytes.len() as u64)?;
     let file_type = normalize_media_type(&file_name, input.file_type.as_deref().unwrap_or(""));
 
     attach_media_bytes_with_state(
@@ -229,9 +239,7 @@ fn attach_media_bytes_with_state(
     bytes: Vec<u8>,
     state: &AppState,
 ) -> Result<TaskResponse, String> {
-    if bytes.is_empty() {
-        return Err("media file is empty".to_string());
-    }
+    validate_media_file_size(file_size_bytes)?;
 
     let media_info = MediaFileInfo::new(file_name.trim(), file_size_bytes, file_type);
     let loader = create_loader(media_info, bytes).map_err(|error| error.to_string())?;
@@ -407,6 +415,18 @@ fn task_to_response(task_id: &str, task: &Task) -> TaskResponse {
 fn validate_required(value: &str, label: &str) -> Result<(), String> {
     if value.trim().is_empty() {
         return Err(format!("{label} is required"));
+    }
+
+    Ok(())
+}
+
+fn validate_media_file_size(file_size_bytes: u64) -> Result<(), String> {
+    if file_size_bytes == 0 {
+        return Err("media file is empty".to_string());
+    }
+
+    if file_size_bytes > MAX_MEDIA_FILE_BYTES {
+        return Err("media file exceeds the 128 MiB limit".to_string());
     }
 
     Ok(())
@@ -858,6 +878,30 @@ mod tests {
         )
         .expect_err("empty path media file should be rejected");
         assert_eq!(empty_file_error, "media file is empty");
+    }
+
+    #[test]
+    fn attach_media_file_from_path_command_test_rejects_oversized_media_before_reading() {
+        let state = AppState::default();
+        let task =
+            create_task_with_state(sample_task_input(), &state).expect("task should be created");
+        let temp_dir = TempDir::new("path-media-attach-oversized");
+        let media_path = temp_dir.path().join("oversized.png");
+        fs::File::create(&media_path)
+            .and_then(|file| file.set_len(MAX_MEDIA_FILE_BYTES + 1))
+            .expect("oversized sparse fixture should be created");
+
+        let error = attach_media_file_from_path_with_state(
+            task.task_id,
+            UploadedMediaPathInput {
+                file_path: media_path.display().to_string(),
+                file_type: None,
+            },
+            &state,
+        )
+        .expect_err("oversized media should be rejected before it is read");
+
+        assert_eq!(error, "media file exceeds the 128 MiB limit");
     }
 
     #[test]

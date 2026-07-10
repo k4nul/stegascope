@@ -101,8 +101,8 @@ Document any skipped validation with the exact blocker.
   missing tasks, and missing media, while broader cross-command state
   transitions still need coverage.
 - Frontend UI/API flow tests are missing.
-- Large media handling now uses a path-based frontend attach flow. A later
-  cleanup can remove the legacy byte-input attach command after compatibility
-  callers are no longer needed.
+- The path-based frontend attach flow rejects files over 128 MiB before reading
+  them. A later cleanup can remove the legacy byte-input attach command after
+  compatibility callers are no longer needed.
 - The draw.io class diagram and exports need regeneration or removal now that a
   maintained text architecture note exists.

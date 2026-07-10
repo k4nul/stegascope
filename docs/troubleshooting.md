@@ -94,6 +94,13 @@ support before accepting generic binary files.
 path. Confirm the selected file is not zero bytes and that the desktop file
 picker returned the intended file.
 
+## Attach Media Reports That the File Is Too Large
+
+`attach_media_file_from_path` rejects files over 128 MiB before reading them
+into the desktop process. Choose a smaller carrier or reduce the file before
+attaching it. The limit keeps local attachment from exhausting process memory;
+it does not change which supported media types the analyzers accept.
+
 ## Start Analysis Is Disabled
 
 The analyze button requires a created task and an attached media file. Create the

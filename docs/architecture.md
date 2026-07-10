@@ -13,10 +13,10 @@ filesystem writes.
 
 The current frontend attach flow uses the Tauri dialog plugin to select a local
 media path, then sends that path to Rust through `attach_media_file_from_path`.
-Rust reads the file bytes, infers canonical media metadata, and owns the loader
-handoff. The older byte-input command remains registered for compatibility and
-command-level coverage, but the current frontend wrapper no longer sends large
-`number[]` media payloads over IPC.
+Rust rejects files over 128 MiB before bounded reading, infers canonical media
+metadata, and owns the loader handoff. The older byte-input command remains
+registered for compatibility and command-level coverage, but the current
+frontend wrapper no longer sends large `number[]` media payloads over IPC.
 
 ## Frontend Responsibilities
 

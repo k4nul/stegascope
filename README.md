@@ -47,8 +47,9 @@ Current implementation facts:
   with uncompressed PCM sample data are analyzed for sample LSB payloads; other
   non-image carriers still rely on byte-oriented signature scanning until later
   analyzer phases are selected.
-- The frontend attach flow selects a local media path, and Rust reads the file
-  inside the Tauri command layer before loader routing.
+- The frontend attach flow selects a local media path. Rust rejects files over
+  128 MiB before bounded reading inside the Tauri command layer, then performs
+  loader routing.
 - Task state is in memory for the running desktop session.
 - Rust analyzer unit tests exist; command-level Rust tests cover create, attach,
   attach/analyze negative paths, path-based reattach result clearing, analyze,
