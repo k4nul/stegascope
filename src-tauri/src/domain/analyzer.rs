@@ -1874,6 +1874,19 @@ mod tests {
     }
 
     #[test]
+    fn inflate_zlib_limited_rejects_text_larger_than_the_png_limit() {
+        let mut encoder = ZlibEncoder::new(Vec::new(), Compression::default());
+        encoder
+            .write_all(&vec![b'x'; MAX_DECOMPRESSED_PNG_TEXT_BYTES + 1])
+            .expect("test text should compress");
+        let compressed = encoder
+            .finish()
+            .expect("compressed test text should finish");
+
+        assert_eq!(inflate_zlib_limited(&compressed), None);
+    }
+
+    #[test]
     fn signature_offsets_yields_overlapping_matches_in_order() {
         let offsets = find_signature_offsets(b"ABABA", b"ABA").collect::<Vec<_>>();
 
