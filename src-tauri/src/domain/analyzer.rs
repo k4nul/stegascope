@@ -1498,7 +1498,7 @@ fn parse_stegascope_packet(bytes: &[u8], offset: usize) -> Option<ParsedStegasco
     }
 
     let name_len = u16::from_be_bytes([bytes[offset + 8], bytes[offset + 9]]) as usize;
-    let payload_len = u64::from_be_bytes([
+    let payload_len = usize::try_from(u64::from_be_bytes([
         bytes[offset + 10],
         bytes[offset + 11],
         bytes[offset + 12],
@@ -1507,7 +1507,8 @@ fn parse_stegascope_packet(bytes: &[u8], offset: usize) -> Option<ParsedStegasco
         bytes[offset + 15],
         bytes[offset + 16],
         bytes[offset + 17],
-    ]) as usize;
+    ]))
+    .ok()?;
     let expected_hash = &bytes[offset + 18..offset + 50];
     let name_start = header_end;
     let name_end = name_start.checked_add(name_len)?;
@@ -2166,6 +2167,14 @@ mod tests {
                 && payload.file.file_type == "application/pdf"
                 && payload.bytes == valid_pdf_payload()
         }));
+    }
+
+    #[test]
+    fn stegascope_packet_parser_rejects_nonrepresentable_payload_length() {
+        let mut packet = stegascope_packet("", b"");
+        packet[10..18].copy_from_slice(&((u32::MAX as u64) + 1).to_be_bytes());
+
+        assert!(parse_stegascope_packet(&packet, 0).is_none());
     }
 
     #[test]
