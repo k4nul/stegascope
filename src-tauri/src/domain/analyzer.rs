@@ -334,11 +334,9 @@ impl FileAnalyzer for LsbAnalyzer {
             return Ok(AnalysisOutcome::default());
         }
 
-        let image = image::load_from_memory(&media.bytes).map_err(|error| {
-            AnalysisError::ExtractionFailed(format!(
-                "failed to decode image for LSB analysis: {error}"
-            ))
-        })?;
+        let Ok(image) = image::load_from_memory(&media.bytes) else {
+            return Ok(AnalysisOutcome::default());
+        };
         let rgba = image.to_rgba8();
         let bits = extract_rgb_lsb_bits(&rgba);
 
@@ -397,11 +395,9 @@ impl FileAnalyzer for Lsb2bppAnalyzer {
             return Ok(AnalysisOutcome::default());
         }
 
-        let image = image::load_from_memory(&media.bytes).map_err(|error| {
-            AnalysisError::ExtractionFailed(format!(
-                "failed to decode image for 2bpp LSB analysis: {error}"
-            ))
-        })?;
+        let Ok(image) = image::load_from_memory(&media.bytes) else {
+            return Ok(AnalysisOutcome::default());
+        };
         let rgba = image.to_rgba8();
         let mut verified_payloads = Vec::new();
         let mut fallback_payloads = Vec::new();
@@ -2150,6 +2146,25 @@ mod tests {
                 && payload.file.analyzer_name == "jpeg-segment-analyzer"
                 && payload.file.validation_status == ValidationStatus::Verified
                 && payload.bytes == jpeg_secret
+        }));
+    }
+
+    #[test]
+    fn default_pipeline_keeps_byte_oriented_analysis_when_image_lsb_decode_fails() {
+        let mut bytes = vec![b'x'; 33];
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.avif", bytes.len() as u64, "image/avif"),
+            bytes,
+        };
+
+        let payloads = extract_payload_candidates(&media)
+            .expect("an undecodable image should not abort byte-oriented analyzers");
+
+        assert!(payloads.iter().any(|payload| {
+            payload.file.analyzer_name == "embedded-signature-analyzer"
+                && payload.file.file_type == "application/pdf"
+                && payload.bytes == valid_pdf_payload()
         }));
     }
 

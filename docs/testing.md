@@ -31,7 +31,8 @@ tests plus command-level tests. Existing tests cover representative payload
 extraction behavior, including:
 
 - RGB LSB extraction from image streams.
-- Non-image media ignored by image-only analyzers.
+- Non-image and undecodable image media skipped by image-only analyzers so
+  byte-oriented analyzers can still inspect supported fallback evidence.
 - PNG metadata packet extraction.
 - PNG metadata signature candidate extraction.
 - PNG metadata boundary handling that ignores chunks after the structural
