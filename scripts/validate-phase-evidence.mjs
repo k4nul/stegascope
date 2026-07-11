@@ -302,6 +302,7 @@ for (const evidence of [
   "jpeg_segment_analyzer_ignores_marker_shaped_sos_image_data",
   "jpeg_segment_analyzer_ignores_byte_stuffed_eoi_in_sos_scan_data",
   "jpeg_segment_analyzer_ignores_restart_and_fill_markers_in_sos_scan_data",
+  "jpeg_segment_analyzer_uses_final_eoi_after_multiple_sos_scans",
   "jpeg_segment_analyzer_recovers_after_malformed_sos_marker_shaped_data",
   "jpeg_segment_analyzer_ignores_false_eoi_in_malformed_sos_marker_length",
   "jpeg_segment_analyzer_ignores_false_eoi_after_scan_soi_decoy",

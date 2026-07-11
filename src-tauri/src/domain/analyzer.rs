@@ -3301,6 +3301,49 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_uses_final_eoi_after_multiple_sos_scans() {
+        let first_scan_payload = b"%PDF-1.7\nfirst scan decoy\n%%EOF\n";
+        let second_scan_payload = b"%PDF-1.7\nsecond scan decoy\n%%EOF\n";
+        let after_eoi_payload = valid_pdf_payload();
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"first scan before restart");
+        bytes.extend_from_slice(&[0xFF, 0xD2]);
+        bytes.extend_from_slice(first_scan_payload);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xDA, b"\x01\x01\x00"));
+        bytes.extend_from_slice(b"second scan before byte-stuffed marker");
+        bytes.extend_from_slice(&[0xFF, 0x00, 0xD9]);
+        bytes.extend_from_slice(second_scan_payload);
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected after-EOI payload");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == first_scan_payload));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == second_scan_payload));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_ignores_tem_marker_in_sos_scan_data() {
         let scan_payload = b"%PDF-1.7\nTEM marker decoy\n%%EOF\n";
         let after_eoi_payload = valid_pdf_payload();
