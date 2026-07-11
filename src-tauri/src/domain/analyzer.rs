@@ -1008,6 +1008,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
         match marker.marker {
             0xD9 => return Some(marker.payload_offset),
             0xD8 => return None,
+            0xD0..=0xD7 => return None,
             0xDA => {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
                 return jpeg_scan_data_eoi_end(bytes, scan_data_start);
@@ -2965,6 +2966,8 @@ mod tests {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(JPEG_SOI);
         bytes.extend_from_slice(&[0xFF, 0xD0]);
+        bytes.extend_from_slice(&[0x00, 0x02]);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
         bytes.extend_from_slice(JPEG_EOI);
         bytes.extend_from_slice(valid_pdf_payload());
         let media = LoadedMedia {
