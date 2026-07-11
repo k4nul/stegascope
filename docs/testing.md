@@ -50,7 +50,7 @@ extraction behavior, including:
   rejection before SOS (including after a payload segment), structural EOI
   requirement and fill-prefixed EOI handling before segment payload extraction,
   false-EOI isolation inside COM/APP segment
-  data, malformed segment and non-marker header byte safety, non-JPEG/truncated
+  data, malformed segment, reserved-marker and non-marker header byte safety, non-JPEG/truncated
   input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation including length-shaped header and false-EOI decoys and recovery when a

@@ -924,6 +924,11 @@ impl<'a> Iterator for JpegPayloadSegments<'a> {
                 return None;
             };
 
+            if !is_jpeg_header_marker(marker.marker) {
+                self.finished = true;
+                return None;
+            }
+
             if marker.marker == 0xD9 || marker.marker == 0xDA {
                 self.finished = true;
                 return None;
@@ -1023,6 +1028,10 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
     let mut offset = JPEG_SOI.len();
 
     while let Some(marker) = next_jpeg_marker(bytes, offset) {
+        if !is_jpeg_header_marker(marker.marker) {
+            return None;
+        }
+
         match marker.marker {
             0xD9 => return Some(marker.payload_offset),
             0xD8 => return None,
@@ -1128,6 +1137,10 @@ fn skip_malformed_jpeg_segment_length(bytes: &[u8], length_offset: usize) -> usi
 
 fn jpeg_header_marker_has_no_payload(marker: u8) -> bool {
     marker == 0x01
+}
+
+fn is_jpeg_header_marker(marker: u8) -> bool {
+    marker == 0x01 || (0xC0..=0xFE).contains(&marker)
 }
 
 fn is_jpeg_payload_segment(marker: u8) -> bool {
@@ -3754,6 +3767,25 @@ mod tests {
         bytes.extend_from_slice(JPEG_SOI);
         bytes.extend_from_slice(b"header junk before markers ");
         bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_reserved_header_markers_before_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(&[0xFF, 0x02, 0x00, 0x02]);
         bytes.extend_from_slice(JPEG_EOI);
         bytes.extend_from_slice(valid_pdf_payload());
         let media = LoadedMedia {
