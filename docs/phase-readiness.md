@@ -199,6 +199,15 @@ error, and whether the failure happened before repository code was checked. See
 
 Current automation context for this documentation handoff:
 
+- July 11, 2026 KST validation-readiness check: `npm run validate:static`
+  passed the download IPC contract (86 checks) and phase-evidence review (288
+  checks). `npm run validate:toolchain-readiness` still found missing local
+  `tsc` and `vite` binaries, and its offline Cargo metadata probe was blocked
+  by the sandbox (`spawnSync cargo EPERM`). `npm run build` consequently
+  stopped before compilation with `sh: 1: tsc: not found`. The checked-in
+  source evidence remains intact, but this is not transition evidence; rerun
+  the build and Rust checks in an environment that can install the lockfile
+  dependencies and execute Cargo.
 - June 16, 2026 phase-controller check: `npm run build` stopped before
   TypeScript compilation with `sh: 1: tsc: not found`. That is consistent with
   missing local Node dependencies.
