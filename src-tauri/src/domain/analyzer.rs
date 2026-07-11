@@ -2979,6 +2979,24 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_rejects_pre_sos_restart_after_payload_segment() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(&[0xFF, 0xD0]);
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_multiple_segments() {
         let first_secret: &[u8] = b"%PDF-1.7\nfirst segmented duplicate\n%%EOF\n";
         let second_secret: &[u8] = b"%PDF-1.7\nsecond segmented duplicate\n%%EOF\n";
