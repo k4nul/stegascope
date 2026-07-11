@@ -52,7 +52,7 @@ extraction behavior, including:
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation including length-shaped header and false-EOI decoys and recovery when a
   length-looking nested SOI decoy would otherwise skip the structural EOI,
-  byte-stuffed SOS EOI isolation, SOS restart/fill marker isolation, malformed
+  byte-stuffed SOS EOI isolation, SOS TEM, restart/fill marker isolation, malformed
   SOS marker recovery, malformed SOS false-EOI length recovery,
   post-SOS marker-segment skipping, and after-EOI evidence labeling, including
   multiple verified packets after
