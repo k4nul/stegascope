@@ -200,14 +200,19 @@ error, and whether the failure happened before repository code was checked. See
 Current automation context for this documentation handoff:
 
 - July 11, 2026 KST validation-readiness check: `npm run validate:static`
-  passed the download IPC contract (86 checks) and phase-evidence review (288
-  checks). `npm run validate:toolchain-readiness` still found missing local
-  `tsc` and `vite` binaries, and its offline Cargo metadata probe was blocked
-  by the sandbox (`spawnSync cargo EPERM`). `npm run build` consequently
-  stopped before compilation with `sh: 1: tsc: not found`. The checked-in
-  source evidence remains intact, but this is not transition evidence; rerun
-  the build and Rust checks in an environment that can install the lockfile
-  dependencies and execute Cargo.
+  passed the download IPC contract (86 checks) and phase-evidence review (290
+  checks). `npm ci --foreground-scripts --loglevel=verbose` could not restore
+  the local binaries because package tarball requests to `registry.npmjs.org`
+  repeatedly reported `EAI_AGAIN`; `node_modules/.bin/tsc` and
+  `node_modules/.bin/vite` remained unavailable. `npm run build` therefore
+  stopped before compilation with `sh: 1: tsc: not found`.
+  `cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer` also
+  stopped before project tests when Cargo could not resolve `index.crates.io`
+  while fetching `image`; the readiness script's offline metadata probe remains
+  blocked by the sandbox (`spawnSync cargo EPERM`). The checked-in source
+  evidence remains intact, but this is not transition evidence; rerun the build
+  and Rust checks in an environment that can install the lockfile dependencies
+  and execute Cargo.
 - June 16, 2026 phase-controller check: `npm run build` stopped before
   TypeScript compilation with `sh: 1: tsc: not found`. That is consistent with
   missing local Node dependencies.
