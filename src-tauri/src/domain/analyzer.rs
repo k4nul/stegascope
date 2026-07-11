@@ -3268,6 +3268,38 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_ignores_fill_prefixed_byte_stuffed_eoi_in_sos_scan_data() {
+        let scan_payload = b"%PDF-1.7\nfill-prefixed scan data decoy\n%%EOF\n";
+        let after_eoi_payload = valid_pdf_payload();
+        let mut scan_data = b"scan data before fill-prefixed byte-stuffed marker".to_vec();
+        scan_data.extend_from_slice(&[0xFF, 0xFF, 0x00, 0xD9]);
+        scan_data.extend_from_slice(scan_payload);
+        let mut bytes = jpeg_with_sos_scan_data(&scan_data);
+        bytes.extend_from_slice(after_eoi_payload);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        let payload = outcome
+            .extracted_payloads
+            .iter()
+            .find(|payload| payload.file.file_name == "jpeg_after_eoi_payload_0.pdf")
+            .expect("expected after-EOI payload");
+        assert_eq!(payload.file.file_type, "application/pdf");
+        assert_eq!(payload.file.suspicious_level, SuspiciousLevel::Critical);
+        assert_eq!(payload.file.validation_status, ValidationStatus::Validated);
+        assert_eq!(payload.bytes, after_eoi_payload);
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.bytes == scan_payload));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_ignores_restart_and_fill_markers_in_sos_scan_data() {
         let scan_payload = b"%PDF-1.7\nrestart marker decoy\n%%EOF\n";
         let after_eoi_payload = valid_pdf_payload();
