@@ -45,16 +45,18 @@ extraction behavior, including:
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   after-EOI corrupt packet decoy recovery, invalid signature decoy recovery,
-  non-payload marker segment exclusion and continuation, marker fill-byte
-  tolerance, standalone TEM header marker handling, restart-marker rejection
-  before SOS even when followed by length-shaped bytes, structural EOI requirement
-  before segment payload extraction, false-EOI isolation inside COM/APP segment
+  dense header traversal, non-payload marker segment exclusion and continuation,
+  marker fill-byte tolerance, standalone TEM header marker handling, restart-marker
+  rejection before SOS (including after a payload segment), structural EOI
+  requirement and fill-prefixed EOI handling before segment payload extraction,
+  false-EOI isolation inside COM/APP segment
   data, malformed segment and non-marker header byte safety, non-JPEG/truncated
   input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation including length-shaped header and false-EOI decoys and recovery when a
   length-looking nested SOI decoy would otherwise skip the structural EOI,
-  byte-stuffed SOS EOI isolation, SOS TEM, restart/fill marker isolation, malformed
+  byte-stuffed SOS EOI isolation (including fill-prefixed bytes), SOS TEM,
+  restart/fill marker isolation, malformed
   SOS marker recovery, malformed SOS false-EOI length recovery, multi-scan
   structural EOI recovery across restart and byte-stuffed scan bytes,
   post-SOS marker-segment skipping, and after-EOI evidence labeling, including
