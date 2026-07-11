@@ -3158,6 +3158,27 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_accepts_fill_prefixed_structural_eoi_for_trailing_payload() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(b"\xFF\xFF\xD9");
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_after_eoi_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::Critical
+                && file.validation_status == ValidationStatus::Validated
+        }));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_does_not_treat_comment_data_after_false_eoi_as_trailing_payload() {
         let mut comment = b"comment-prefix\xFF\xD9".to_vec();
         comment.extend_from_slice(valid_pdf_payload());
