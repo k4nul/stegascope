@@ -206,7 +206,7 @@ fn attach_media_file_from_path_with_state(
         .ok_or_else(|| "media file name is invalid".to_string())?
         .to_string();
     let metadata =
-        fs::metadata(&path).map_err(|error| format!("failed to inspect media file: {error}"))?;
+        fs::metadata(&path).map_err(|error| format!("failed to read media file: {error}"))?;
     if !metadata.is_file() {
         return Err("media path is not a file".to_string());
     }
