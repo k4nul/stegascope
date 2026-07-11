@@ -131,6 +131,7 @@
         "jpeg_segment_analyzer_requires_structural_eoi_before_segment_payloads",
         "jpeg_segment_analyzer_uses_structural_eoi_for_trailing_payload",
         "jpeg_segment_analyzer_does_not_treat_comment_data_after_false_eoi_as_trailing_payload",
+        "jpeg_segment_analyzer_does_not_treat_app_data_after_false_eoi_as_trailing_payload",
         "jpeg_segment_analyzer_does_not_scan_sos_image_data_as_segment_payload",
         "jpeg_segment_analyzer_ignores_marker_shaped_sos_image_data",
         "jpeg_segment_analyzer_ignores_byte_stuffed_eoi_in_sos_scan_data",

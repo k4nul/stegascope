@@ -3249,6 +3249,32 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_does_not_treat_app_data_after_false_eoi_as_trailing_payload() {
+        let mut app_data = b"app-metadata-prefix\xFF\xD9".to_vec();
+        app_data.extend_from_slice(valid_pdf_payload());
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xE1, &app_data));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name.starts_with("jpeg_app1_segment_1_payload_")
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::High
+        }));
+        assert!(!outcome
+            .extracted_files
+            .iter()
+            .any(|file| file.file_name.starts_with("jpeg_after_eoi_payload_")));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_rejects_invalid_after_eoi_packet_and_keeps_signature_fallback() {
         let mut invalid_packet =
             stegascope_packet("corrupt_after_eoi_note.pdf", valid_pdf_payload());

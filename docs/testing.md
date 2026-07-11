@@ -47,8 +47,9 @@ extraction behavior, including:
   non-payload marker segment exclusion and continuation, marker fill-byte
   tolerance, standalone TEM header marker handling, restart-marker rejection
   before SOS even when followed by length-shaped bytes, structural EOI requirement
-  before segment payload extraction, malformed segment and non-marker header byte
-  safety, non-JPEG/truncated input safety,
+  before segment payload extraction, false-EOI isolation inside COM/APP segment
+  data, malformed segment and non-marker header byte safety, non-JPEG/truncated
+  input safety,
   scan-data isolation, marker-shaped scan-data isolation, nested SOI marker
   decoy isolation including length-shaped header and false-EOI decoys and recovery when a
   length-looking nested SOI decoy would otherwise skip the structural EOI,
