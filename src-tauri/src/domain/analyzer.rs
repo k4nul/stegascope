@@ -900,43 +900,65 @@ struct JpegSegment<'a> {
     data: &'a [u8],
 }
 
-fn jpeg_payload_segments(bytes: &[u8]) -> Vec<JpegSegment<'_>> {
-    if !bytes.starts_with(JPEG_SOI) {
-        return Vec::new();
+// Stream segments so marker-dense untrusted JPEGs do not require buffering every
+// COM/APP view before their payload candidates can be analyzed.
+fn jpeg_payload_segments(bytes: &[u8]) -> JpegPayloadSegments<'_> {
+    JpegPayloadSegments {
+        bytes,
+        offset: JPEG_SOI.len(),
+        index: 0,
+        finished: !bytes.starts_with(JPEG_SOI),
     }
+}
 
-    let mut segments = Vec::new();
-    let mut offset = JPEG_SOI.len();
-    let mut index = 0;
+struct JpegPayloadSegments<'a> {
+    bytes: &'a [u8],
+    offset: usize,
+    index: usize,
+    finished: bool,
+}
 
-    while let Some(marker) = next_jpeg_marker(bytes, offset) {
-        if marker.marker == 0xD9 || marker.marker == 0xDA {
-            break;
+impl<'a> Iterator for JpegPayloadSegments<'a> {
+    type Item = JpegSegment<'a>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        while !self.finished {
+            let Some(marker) = next_jpeg_marker(self.bytes, self.offset) else {
+                self.finished = true;
+                return None;
+            };
+
+            if marker.marker == 0xD9 || marker.marker == 0xDA {
+                self.finished = true;
+                return None;
+            }
+
+            if jpeg_header_marker_has_no_payload(marker.marker) {
+                self.offset = marker.payload_offset;
+                continue;
+            }
+
+            let Some((data_start, data_end)) =
+                jpeg_segment_data_bounds(self.bytes, marker.payload_offset)
+            else {
+                self.finished = true;
+                return None;
+            };
+
+            self.index += 1;
+            self.offset = data_end;
+
+            if is_jpeg_payload_segment(marker.marker) {
+                return Some(JpegSegment {
+                    index: self.index,
+                    marker: marker.marker,
+                    data: &self.bytes[data_start..data_end],
+                });
+            }
         }
 
-        if jpeg_header_marker_has_no_payload(marker.marker) {
-            offset = marker.payload_offset;
-            continue;
-        }
-
-        let Some((data_start, data_end)) = jpeg_segment_data_bounds(bytes, marker.payload_offset)
-        else {
-            break;
-        };
-
-        index += 1;
-        if is_jpeg_payload_segment(marker.marker) {
-            segments.push(JpegSegment {
-                index,
-                marker: marker.marker,
-                data: &bytes[data_start..data_end],
-            });
-        }
-
-        offset = data_end;
+        None
     }
-
-    segments
 }
 
 fn jpeg_after_eoi_payload(bytes: &[u8]) -> Option<&[u8]> {
@@ -2909,6 +2931,31 @@ mod tests {
         assert_eq!(file.file_type, "application/pdf");
         assert_eq!(file.suspicious_level, SuspiciousLevel::High);
         assert_eq!(file.validation_status, ValidationStatus::Validated);
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_streams_past_dense_payload_headers() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        for _ in 0..4_096 {
+            bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, b"harmless-comment"));
+        }
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("dense-headers.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_files.len(), 1);
+        assert!(outcome.extracted_files.iter().any(|file| {
+            file.file_name == "jpeg_com_segment_4097_payload_0.pdf"
+                && file.file_type == "application/pdf"
+                && file.suspicious_level == SuspiciousLevel::High
+                && file.validation_status == ValidationStatus::Validated
+        }));
     }
 
     #[test]
