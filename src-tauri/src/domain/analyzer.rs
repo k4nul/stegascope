@@ -3162,6 +3162,45 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_limits_verified_packets_per_comment_segment() {
+        let mut comment = Vec::new();
+
+        for index in 1..=4 {
+            let payload = format!("%PDF-1.7\ncomment payload {index}\n%%EOF\n");
+            let packet =
+                stegascope_packet(&format!("comment_payload_{index}.pdf"), payload.as_bytes());
+            comment.extend_from_slice(&packet);
+        }
+
+        let bytes = jpeg_with_comment_segment(&comment);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+        let names = outcome
+            .extracted_payloads
+            .iter()
+            .map(|payload| payload.file.file_name.as_str())
+            .collect::<Vec<_>>();
+
+        assert_eq!(names.len(), MAX_STEGASCOPE_PACKET_PAYLOADS);
+        assert_eq!(
+            names,
+            [
+                "comment_payload_1.pdf",
+                "comment_payload_2.pdf",
+                "comment_payload_3.pdf",
+            ]
+        );
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_segment_and_after_eoi() {
         let segment_secret: &[u8] = b"%PDF-1.7\nsegment same-name payload\n%%EOF\n";
         let after_eoi_secret: &[u8] = b"%PDF-1.7\nafter-eoi same-name payload\n%%EOF\n";
