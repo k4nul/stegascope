@@ -338,23 +338,21 @@ function App() {
   };
 
   const handleDeleteTab = (tabId: number): void => {
-    setTabs((prev) => {
-      if (prev.length === 1) {
-        return prev;
+    if (tabs.length === 1) {
+      return;
+    }
+
+    const deleteIndex = tabs.findIndex((tab) => tab.id === tabId);
+    const nextTabs = tabs.filter((tab) => tab.id !== tabId);
+
+    if (activeTabId === tabId) {
+      const fallbackTab = nextTabs[Math.max(0, deleteIndex - 1)] ?? nextTabs[0];
+      if (fallbackTab) {
+        setActiveTabId(fallbackTab.id);
       }
+    }
 
-      const deleteIndex = prev.findIndex((tab) => tab.id === tabId);
-      const nextTabs = prev.filter((tab) => tab.id !== tabId);
-
-      if (activeTabId === tabId) {
-        const fallbackTab = nextTabs[Math.max(0, deleteIndex - 1)] ?? nextTabs[0];
-        if (fallbackTab) {
-          setActiveTabId(fallbackTab.id);
-        }
-      }
-
-      return nextTabs;
-    });
+    setTabs(nextTabs);
   };
 
   return (
