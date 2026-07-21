@@ -3781,6 +3781,25 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_rejects_byte_stuffed_header_data_before_payloads() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0xFF, 0x00]);
+        bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, valid_pdf_payload()));
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_rejects_reserved_header_markers_before_payloads() {
         let mut bytes = Vec::new();
         bytes.extend_from_slice(JPEG_SOI);
@@ -3817,6 +3836,25 @@ mod tests {
             assert!(outcome.extracted_files.is_empty());
             assert!(outcome.extracted_payloads.is_empty());
         }
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_rejects_after_eoi_payload_after_malformed_segment_length() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+        bytes.extend_from_slice(&[0xFF, 0xE1, 0xFF, 0xFF]);
+        bytes.extend_from_slice(b"truncated APP1 data");
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert!(outcome.extracted_files.is_empty());
+        assert!(outcome.extracted_payloads.is_empty());
     }
 
     #[test]
