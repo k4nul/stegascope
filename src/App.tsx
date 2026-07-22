@@ -494,20 +494,12 @@ function App() {
 
                   <div
                     className={`dropzone ${
-                      activeTab.phase === "uploading" || activeTab.phase === "analyzing"
-                        ? "busy"
-                        : ""
+                      activeTab.phase === "uploading" ? "busy" : ""
                     }`}
                     onClick={() => void handleSelectMediaFile()}
                     role="button"
-                    aria-disabled={
-                      activeTab.phase === "uploading" || activeTab.phase === "analyzing"
-                    }
-                    tabIndex={
-                      activeTab.phase === "uploading" || activeTab.phase === "analyzing"
-                        ? -1
-                        : 0
-                    }
+                    aria-disabled={activeTab.phase === "uploading"}
+                    tabIndex={activeTab.phase === "uploading" ? -1 : 0}
                     onKeyDown={(event) => {
                       if (event.key === "Enter" || event.key === " ") {
                         event.preventDefault();
@@ -518,9 +510,7 @@ function App() {
                     <p className="drop-title">
                       {activeTab.phase === "uploading"
                         ? "Loading media file..."
-                        : activeTab.phase === "analyzing"
-                          ? "Analysis in progress..."
-                          : "Select image, audio, or video file"}
+                        : "Select image, audio, or video file"}
                     </p>
                     <p className="muted">No file data leaves this desktop session.</p>
                     {activeTab.mediaFile && (
@@ -539,8 +529,7 @@ function App() {
                       onClick={handleAnalyze}
                       disabled={
                         !activeTab.mediaFile ||
-                        activeTab.phase === "uploading" ||
-                        activeTab.phase === "analyzing"
+                        activeTab.phase === "uploading"
                       }
                     >
                       Start Analysis
