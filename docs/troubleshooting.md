@@ -90,9 +90,9 @@ support before accepting generic binary files.
 
 ## Attach Media Reports An Empty File
 
-`attach_media_file_from_path` rejects empty files after Rust reads the selected
-path. Confirm the selected file is not zero bytes and that the desktop file
-picker returned the intended file.
+`attach_media_file_from_path` rejects empty files from metadata before opening
+or reading the selected path. Confirm the selected file is not zero bytes and
+that the desktop file picker returned the intended file.
 
 ## Attach Media Reports That the File Is Too Large
 
