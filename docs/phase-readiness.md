@@ -50,6 +50,15 @@ validation gap is still the local runtime toolchain: `npm run build` requires
 installed Node dependencies for `tsc` and `vite`, and Rust/Tauri checks require
 cached or reachable Cargo dependencies before they can execute repository tests.
 
+July 22, 2026 KST validation recovery installed the checked-in Node lockfile
+with `npm ci --ignore-scripts --no-audit --fund=false`; `npm run build` then
+passed (`tsc && vite build`). The dependency-free static validation also passed
+the download IPC contract (86 checks) and phase-evidence review (304 checks).
+The focused JPEG Rust test remains blocked before project tests because Cargo
+cannot resolve `index.crates.io` while fetching the locked `image` crate. This
+is fresh frontend validation evidence only; it does not change `current_phase`
+until the required Rust validation can also run.
+
 ## Pre-Transition Audio Evidence
 
 `src-tauri/src/domain/analyzer.rs` also defines `WavPcmLsbAnalyzer` for
