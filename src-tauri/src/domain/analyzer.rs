@@ -3273,6 +3273,50 @@ mod tests {
     }
 
     #[test]
+    fn jpeg_segment_analyzer_does_not_exceed_the_packet_limit_after_eoi() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+
+        for segment_index in 1..=(MAX_JPEG_EXTRACTED_PAYLOADS / MAX_STEGASCOPE_PACKET_PAYLOADS) {
+            let mut segment = Vec::new();
+            for packet_index in 1..=MAX_STEGASCOPE_PACKET_PAYLOADS {
+                let payload =
+                    format!("%PDF-1.7\nsegment {segment_index} payload {packet_index}\n%%EOF\n");
+                segment.extend_from_slice(&stegascope_packet(
+                    &format!("segment_{segment_index}_payload_{packet_index}.pdf"),
+                    payload.as_bytes(),
+                ));
+            }
+            bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, &segment));
+        }
+
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(&stegascope_packet(
+            "after_eoi_payload.pdf",
+            b"%PDF-1.7\nafter EOI payload\n%%EOF\n",
+        ));
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(
+            outcome.extracted_payloads.len(),
+            MAX_JPEG_EXTRACTED_PAYLOADS
+        );
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.file.file_name == "after_eoi_payload.pdf"));
+    }
+
+    #[test]
     fn jpeg_segment_analyzer_preserves_distinct_same_name_packets_from_segment_and_after_eoi() {
         let segment_secret: &[u8] = b"%PDF-1.7\nsegment same-name payload\n%%EOF\n";
         let after_eoi_secret: &[u8] = b"%PDF-1.7\nafter-eoi same-name payload\n%%EOF\n";
