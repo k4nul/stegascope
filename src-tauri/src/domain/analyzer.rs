@@ -774,6 +774,7 @@ const PNG_SIGNATURE: &[u8; 8] = b"\x89PNG\r\n\x1A\n";
 const JPEG_SOI: &[u8; 2] = b"\xFF\xD8";
 const JPEG_EOI: &[u8; 2] = b"\xFF\xD9";
 const MAX_DECOMPRESSED_PNG_TEXT_BYTES: usize = 2 * 1024 * 1024;
+const MAX_JPEG_EXTRACTED_PAYLOADS: usize = 12;
 
 fn extract_metadata_payloads(media: &LoadedMedia, analyzer_name: &str) -> Vec<ExtractedPayload> {
     if !media.bytes.starts_with(PNG_SIGNATURE) {
@@ -855,39 +856,67 @@ fn extract_jpeg_segment_payloads(
     let mut fallback_payloads = Vec::new();
 
     for segment in jpeg_payload_segments(&media.bytes) {
-        verified_payloads.extend(find_stegascope_packet_candidates(
-            segment.data,
-            analyzer_name,
-        ));
-
-        let prefix = format!(
-            "jpeg_{}_segment_{}",
-            jpeg_segment_type_label(segment.marker),
-            segment.index
+        extend_jpeg_payloads_up_to_limit(
+            &mut verified_payloads,
+            find_stegascope_packet_candidates(segment.data, analyzer_name),
         );
-        fallback_payloads.extend(signature_payload_candidates(
-            segment.data,
-            None,
-            &prefix,
-            0,
-            SuspiciousLevel::High,
-            analyzer_name,
-        ));
+
+        if verified_payloads.len() >= MAX_JPEG_EXTRACTED_PAYLOADS {
+            break;
+        }
+
+        if verified_payloads.is_empty() {
+            let prefix = format!(
+                "jpeg_{}_segment_{}",
+                jpeg_segment_type_label(segment.marker),
+                segment.index
+            );
+            extend_jpeg_payloads_up_to_limit(
+                &mut fallback_payloads,
+                signature_payload_candidates(
+                    segment.data,
+                    None,
+                    &prefix,
+                    0,
+                    SuspiciousLevel::High,
+                    analyzer_name,
+                ),
+            );
+        }
     }
 
-    if let Some(after_eoi) = jpeg_after_eoi_payload(&media.bytes) {
-        verified_payloads.extend(find_stegascope_packet_candidates(after_eoi, analyzer_name));
-        fallback_payloads.extend(signature_payload_candidates(
-            after_eoi,
-            None,
-            "jpeg_after_eoi",
-            0,
-            SuspiciousLevel::Critical,
-            analyzer_name,
-        ));
+    if verified_payloads.len() < MAX_JPEG_EXTRACTED_PAYLOADS {
+        if let Some(after_eoi) = jpeg_after_eoi_payload(&media.bytes) {
+            extend_jpeg_payloads_up_to_limit(
+                &mut verified_payloads,
+                find_stegascope_packet_candidates(after_eoi, analyzer_name),
+            );
+
+            if verified_payloads.is_empty() {
+                extend_jpeg_payloads_up_to_limit(
+                    &mut fallback_payloads,
+                    signature_payload_candidates(
+                        after_eoi,
+                        None,
+                        "jpeg_after_eoi",
+                        0,
+                        SuspiciousLevel::Critical,
+                        analyzer_name,
+                    ),
+                );
+            }
+        }
     }
 
     payloads_prefer_verified(verified_payloads, fallback_payloads)
+}
+
+fn extend_jpeg_payloads_up_to_limit(
+    payloads: &mut Vec<ExtractedPayload>,
+    candidates: Vec<ExtractedPayload>,
+) {
+    let remaining = MAX_JPEG_EXTRACTED_PAYLOADS.saturating_sub(payloads.len());
+    payloads.extend(candidates.into_iter().take(remaining));
 }
 
 struct JpegSegment<'a> {
@@ -3198,6 +3227,49 @@ mod tests {
             .extracted_payloads
             .iter()
             .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_limits_verified_packets_across_segments() {
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+
+        for index in 1..=((MAX_JPEG_EXTRACTED_PAYLOADS / MAX_STEGASCOPE_PACKET_PAYLOADS) + 1) {
+            let mut segment = Vec::new();
+            for packet_index in 1..=MAX_STEGASCOPE_PACKET_PAYLOADS {
+                let payload = format!("%PDF-1.7\nsegment {index} payload {packet_index}\n%%EOF\n");
+                segment.extend_from_slice(&stegascope_packet(
+                    &format!("segment_{index}_payload_{packet_index}.pdf"),
+                    payload.as_bytes(),
+                ));
+            }
+            bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, &segment));
+        }
+
+        bytes.extend_from_slice(JPEG_EOI);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(
+            outcome.extracted_payloads.len(),
+            MAX_JPEG_EXTRACTED_PAYLOADS
+        );
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.file.file_name == "segment_4_payload_3.pdf"));
+        assert!(!outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.file.file_name == "segment_5_payload_1.pdf"));
     }
 
     #[test]

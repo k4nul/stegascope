@@ -44,6 +44,7 @@ extraction behavior, including:
   preservation, and invalid `IEND` CRC rejection.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
+  package-wide recovered-payload limits across marker-dense JPEG segments,
   after-EOI corrupt packet decoy recovery, invalid signature decoy recovery,
   dense header traversal, non-payload marker segment exclusion and continuation,
   marker fill-byte tolerance, standalone TEM header marker handling, restart-marker
