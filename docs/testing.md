@@ -46,6 +46,8 @@ extraction behavior, including:
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
   package-wide recovered-payload limits across marker-dense JPEG segments,
   after-EOI corrupt packet decoy recovery, invalid signature decoy recovery,
+  exact-packet deduplication before the package-wide cap so a unique after-EOI
+  packet survives repeated segment copies,
   dense header traversal, non-payload marker segment exclusion and continuation,
   marker fill-byte tolerance, standalone TEM header marker handling, restart-marker
   rejection before SOS (including after a payload segment), structural EOI
