@@ -1496,17 +1496,22 @@ fn signature_payload_candidates(
 
 const STEGASCOPE_PACKET_MAGIC: &[u8; 8] = b"SS2X3ME1";
 const STEGASCOPE_PACKET_HEADER_LEN: usize = 50;
+const MAX_STEGASCOPE_PACKET_SCAN_BYTES: usize = 2 * 1024 * 1024;
+const MAX_STEGASCOPE_PACKET_MARKER_CHECKS: usize = 32;
 const MAX_STEGASCOPE_PACKET_PAYLOADS: usize = 3;
 
 fn find_stegascope_packet_candidates(bytes: &[u8], analyzer_name: &str) -> Vec<ExtractedPayload> {
     let mut payloads = Vec::new();
+    let scan_bytes = &bytes[..bytes.len().min(MAX_STEGASCOPE_PACKET_SCAN_BYTES)];
 
-    for offset in find_signature_offsets(bytes, STEGASCOPE_PACKET_MAGIC) {
+    for offset in find_signature_offsets(scan_bytes, STEGASCOPE_PACKET_MAGIC)
+        .take(MAX_STEGASCOPE_PACKET_MARKER_CHECKS)
+    {
         if payloads.len() >= MAX_STEGASCOPE_PACKET_PAYLOADS {
             break;
         }
 
-        let Some(packet) = parse_stegascope_packet(bytes, offset) else {
+        let Some(packet) = parse_stegascope_packet(scan_bytes, offset) else {
             continue;
         };
 
@@ -3227,6 +3232,70 @@ mod tests {
             .extracted_payloads
             .iter()
             .all(|payload| payload.source == PayloadSource::VerifiedPacket));
+    }
+
+    #[test]
+    fn packet_scanner_accepts_the_last_allowed_marker_check() {
+        let mut bytes =
+            vec![0; (MAX_STEGASCOPE_PACKET_MARKER_CHECKS - 1) * STEGASCOPE_PACKET_MAGIC.len()];
+
+        for index in 0..(MAX_STEGASCOPE_PACKET_MARKER_CHECKS - 1) {
+            let offset = index * STEGASCOPE_PACKET_MAGIC.len();
+            bytes[offset..offset + STEGASCOPE_PACKET_MAGIC.len()]
+                .copy_from_slice(STEGASCOPE_PACKET_MAGIC);
+        }
+
+        bytes.extend_from_slice(&stegascope_packet(
+            "last_allowed_marker.pdf",
+            valid_pdf_payload(),
+        ));
+
+        let payloads = find_stegascope_packet_candidates(&bytes, "test-analyzer");
+
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(payloads[0].file.file_name, "last_allowed_marker.pdf");
+    }
+
+    #[test]
+    fn packet_scanner_ignores_packets_beyond_the_marker_check_budget() {
+        let mut bytes =
+            vec![0; MAX_STEGASCOPE_PACKET_MARKER_CHECKS * STEGASCOPE_PACKET_MAGIC.len()];
+
+        for index in 0..MAX_STEGASCOPE_PACKET_MARKER_CHECKS {
+            let offset = index * STEGASCOPE_PACKET_MAGIC.len();
+            bytes[offset..offset + STEGASCOPE_PACKET_MAGIC.len()]
+                .copy_from_slice(STEGASCOPE_PACKET_MAGIC);
+        }
+
+        bytes.extend_from_slice(&stegascope_packet(
+            "beyond_marker_budget.pdf",
+            valid_pdf_payload(),
+        ));
+
+        assert!(find_stegascope_packet_candidates(&bytes, "test-analyzer").is_empty());
+    }
+
+    #[test]
+    fn packet_scanner_accepts_packets_ending_at_the_scan_window() {
+        let packet = stegascope_packet("window_boundary.pdf", valid_pdf_payload());
+        let mut bytes = vec![0; MAX_STEGASCOPE_PACKET_SCAN_BYTES - packet.len()];
+        bytes.extend_from_slice(&packet);
+
+        let payloads = find_stegascope_packet_candidates(&bytes, "test-analyzer");
+
+        assert_eq!(payloads.len(), 1);
+        assert_eq!(payloads[0].file.file_name, "window_boundary.pdf");
+    }
+
+    #[test]
+    fn packet_scanner_ignores_packets_beyond_the_scan_window() {
+        let mut bytes = vec![0; MAX_STEGASCOPE_PACKET_SCAN_BYTES];
+        bytes.extend_from_slice(&stegascope_packet(
+            "beyond_scan_window.pdf",
+            valid_pdf_payload(),
+        ));
+
+        assert!(find_stegascope_packet_candidates(&bytes, "test-analyzer").is_empty());
     }
 
     #[test]
