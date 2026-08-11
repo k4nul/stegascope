@@ -44,6 +44,8 @@ extraction behavior, including:
   preservation, and invalid `IEND` CRC rejection.
 - JPEG COM/APP segment extraction, structural after-EOI signature extraction,
   APP0/APP15 boundary segment coverage, corrupt packet magic decoy recovery,
+  shared verified-packet scanner budgets (2 MiB per candidate buffer, first 32
+  magic markers, and three recovered packets),
   package-wide recovered-payload limits across marker-dense JPEG segments,
   after-EOI corrupt packet decoy recovery, invalid signature decoy recovery,
   dense header traversal, non-payload marker segment exclusion and continuation,
