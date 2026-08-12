@@ -611,7 +611,7 @@ fn wav_pcm_data(bytes: &[u8]) -> Option<WavPcmData<'_>> {
 
     let mut format = None;
     let mut data = None;
-    let mut offset = 12;
+    let mut offset: usize = 12;
 
     while offset.checked_add(8)? <= bytes.len() {
         let chunk_type = &bytes[offset..offset + 4];
@@ -915,8 +915,9 @@ fn extend_jpeg_payloads_up_to_limit(
     payloads: &mut Vec<ExtractedPayload>,
     candidates: Vec<ExtractedPayload>,
 ) {
-    let remaining = MAX_JPEG_EXTRACTED_PAYLOADS.saturating_sub(payloads.len());
-    payloads.extend(candidates.into_iter().take(remaining));
+    payloads.extend(candidates);
+    dedupe_payloads(payloads);
+    payloads.truncate(MAX_JPEG_EXTRACTED_PAYLOADS);
 }
 
 struct JpegSegment<'a> {
@@ -1069,7 +1070,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
                 return jpeg_scan_data_eoi_end(bytes, scan_data_start);
             }
-            marker if jpeg_header_marker_has_no_payload(marker) => {
+            marker_byte if jpeg_header_marker_has_no_payload(marker_byte) => {
                 offset = marker.payload_offset;
             }
             _ => {
@@ -1902,7 +1903,10 @@ impl Iterator for SignatureOffsets<'_, '_> {
     }
 }
 
-fn find_signature_offsets(bytes: &[u8], signature: &[u8]) -> SignatureOffsets<'_, '_> {
+fn find_signature_offsets<'a, 'b>(
+    bytes: &'a [u8],
+    signature: &'b [u8],
+) -> SignatureOffsets<'a, 'b> {
     SignatureOffsets {
         bytes,
         signature,
@@ -3383,6 +3387,47 @@ mod tests {
             .extracted_payloads
             .iter()
             .any(|payload| payload.file.file_name == "after_eoi_payload.pdf"));
+    }
+
+    #[test]
+    fn jpeg_segment_analyzer_dedupes_packets_before_preserving_after_eoi_payload() {
+        let repeated_packet = stegascope_packet(
+            "repeated_segment_packet.pdf",
+            b"%PDF-1.7\nrepeated segment packet\n%%EOF\n",
+        );
+        let unique_after_eoi_packet = stegascope_packet(
+            "unique_after_eoi_packet.pdf",
+            b"%PDF-1.7\nunique after EOI packet\n%%EOF\n",
+        );
+        let mut bytes = Vec::new();
+        bytes.extend_from_slice(JPEG_SOI);
+
+        for _ in 0..(MAX_JPEG_EXTRACTED_PAYLOADS / MAX_STEGASCOPE_PACKET_PAYLOADS) {
+            let mut segment = Vec::new();
+            for _ in 0..MAX_STEGASCOPE_PACKET_PAYLOADS {
+                segment.extend_from_slice(&repeated_packet);
+            }
+            bytes.extend_from_slice(&jpeg_segment_bytes(0xFE, &segment));
+        }
+
+        bytes.extend_from_slice(JPEG_EOI);
+        bytes.extend_from_slice(&unique_after_eoi_packet);
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.jpg", bytes.len() as u64, "image/jpeg"),
+            bytes,
+        };
+
+        let outcome = JpegSegmentAnalyzer::default().analyze(&media).unwrap();
+
+        assert_eq!(outcome.extracted_payloads.len(), 2);
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.file.file_name == "repeated_segment_packet.pdf"));
+        assert!(outcome
+            .extracted_payloads
+            .iter()
+            .any(|payload| payload.file.file_name == "unique_after_eoi_packet.pdf"));
     }
 
     #[test]
