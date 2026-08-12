@@ -7,8 +7,8 @@
     "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented and tested, same-name payload downloads use deterministic payload IDs with current-result lookup, and the current frontend/Rust local-file boundary remains explicit.",
     "mode": "machine-gated-analyzer-expansion",
     "validation_command": "npm run build",
-    "transition_validation_command": "npm run build",
-    "decision_rule": "All required gates must pass their validation evidence or be explicitly waived before changing current_phase; machine-check status describes how a gate is validated, not a pass result."
+    "transition_validation_command": "npm run build && cargo test --manifest-path src-tauri/Cargo.toml",
+    "decision_rule": "All required behavior checks must pass, including the Rust analyzer tests, before changing current_phase; machine-check status describes how a gate is validated, not a pass result."
   },
   "phase_model": [
     {
