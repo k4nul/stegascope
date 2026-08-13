@@ -1,20 +1,17 @@
 # Analyzer Phase Readiness
 
 This note records the documentation-facing evidence for the current
-`container-side-channels` phase, the boundary before `audio-lsb-analysis`, and
-the pre-transition audio analyzer evidence that already exists in source.
-It is not a phase transition record; `current_phase` stays unchanged until the
-transition validation command and required analyzer evidence gates pass locally.
+`rust-side-ingestion` phase and the boundary before `release-readiness`.
 
 ## Current Phase
 
 `docs/instructions/phase-gates.json` declares:
 
-- current phase: `container-side-channels`
-- next phase: `audio-lsb-analysis`
+- current phase: `rust-side-ingestion`
+- next phase: `release-readiness`
 - transition validation command: `npm run build && cargo test --manifest-path src-tauri/Cargo.toml`
 
-The current phase covers the first image-container analyzer package:
+Completed analyzer regression evidence includes:
 
 - JPEG COM/APP0-APP15 segment payload scanning.
 - JPEG payload bytes appended after the structural EOI marker.
@@ -33,16 +30,14 @@ The practical handoff state is:
   dedupe, same-name verified-packet and signature-scan payload preservation,
   replaced-result and reattached-result ID rejection, and blank or
   missing-payload ID rejection, plus current-byte download writes.
-- WAV PCM LSB source and focused tests are present as pre-transition evidence
-  for the next phase.
-- The phase transition is still blocked until `npm run build` passes locally.
-  A `tsc: not found` result means setup is incomplete, not that source evidence
-  failed.
+- WAV PCM LSB source and focused tests passed as required audio-phase evidence.
+- The current Rust-side ingestion phase retains one decision: remove the legacy
+  byte-input command or document a real compatibility caller.
 
 ## Latest Recovery Snapshot
 
 August 13, 2026 KST validation recovery completed the full transition command.
-`npm run validate:static` passed 304 phase-evidence checks, the download IPC
+`npm run validate:static` passed 306 phase-evidence checks, the download IPC
 validator passed 86 checks, `npm run build` completed, and an isolated Debian
 Tauri toolchain ran all 143 Rust tests successfully. The run exposed and fixed
 three compile errors plus two analyzer regressions: nested invalid PDF headers
@@ -68,20 +63,16 @@ cannot resolve `index.crates.io` while fetching the locked `image` crate. This
 is fresh frontend validation evidence only; it does not change `current_phase`
 until the required Rust validation can also run.
 
-## Pre-Transition Audio Evidence
+## Audio Regression Evidence
 
 `src-tauri/src/domain/analyzer.rs` also defines `WavPcmLsbAnalyzer` for
 uncompressed PCM WAV carriers, and `src-tauri/src/domain/analyzer_pipeline.rs`
 registers it in the default analyzer set. The focused tests cover verified
 packet recovery, signature-only fallback extraction, default pipeline
 registration, and unsupported or truncated WAV safety.
-The manifest records that evidence as `wav-pcm-lsb-pretransition-evidence` with
-`required_for_transition: false` so reviewers can see the next-phase source
-package without treating it as a current-phase transition.
-
-This evidence does not move `current_phase` by itself. The phase state stays
-`container-side-channels` until the manifest transition validation command and
-required gate review pass locally.
+The manifest records that evidence as `wav-pcm-lsb-analysis-passes` with
+`required_for_transition: true`. This converts the previously informational
+package into executable evidence for the active phase.
 
 ## Source Evidence
 
@@ -94,7 +85,7 @@ Use these checked-in source locations when reviewing the phase:
 | Analyzer package tests exist | `src-tauri/src/domain/analyzer.rs` includes PNG compressed text, same-name packet preservation, default-pipeline container-side-channel packet extraction, missing or invalid structural IEND rejection, after-IEND, JPEG COM/APP, corrupt packet magic decoy recovery in segments and after EOI, invalid signature decoy recovery, APP0/APP15 boundary segment, dense-header streaming, non-payload marker segment exclusion and continuation, marker fill-byte tolerance, standalone TEM header marker handling, restart-marker rejection before SOS (including after a payload segment), after-EOI, multiple verified packet extraction after EOI, invalid after-EOI packet fallback, structural EOI requirement and fill-prefixed EOI handling, false-EOI isolation in COM/APP segment data, scan-data isolation, marker-shaped scan-data isolation, nested SOI marker decoy isolation (including length-shaped header decoys), length-shaped nested SOI false-EOI decoy isolation, length-looking nested SOI structural EOI recovery, byte-stuffed SOS EOI isolation (including fill-prefixed bytes), SOS TEM, restart/fill marker isolation, multi-scan structural EOI recovery, malformed SOS marker recovery, malformed SOS false-EOI length recovery, post-SOS marker-segment skipping, same-name segment/after-EOI preservation, same-name multi-segment preservation, verified segment packet preference over after-EOI signature fallback, verified after-EOI packet preference over segment signature fallback, reserved-marker and non-marker header byte rejection, malformed-segment, and non-JPEG/truncated input safety tests. |
 | Local-file boundary evidence exists | `src/App.tsx` and `src/api/analysis.ts` send selected media paths through `attach_media_file_from_path`; `src-tauri/src/lib.rs` reads bytes inside Rust and includes `attach_media_file_from_path_command_test_reads_local_media_path` plus stale-task rejection before path inspection. |
 | Payload ID download disambiguation exists | `src-tauri/src/domain/analyzer_pipeline.rs` assigns deterministic payload IDs from analyzer name, embedded file name, file type, payload source, and recovered bytes; `src-tauri/src/domain/task.rs` stores payload bytes with metadata; `src-tauri/src/lib.rs` resolves payload IDs against the current analysis result before downloading, including same-name JPEG segment and after-EOI payload command tests; `src/App.tsx` and `src/api/analysis.ts` pass `file.id` through the frontend IPC wrapper. |
-| WAV PCM LSB pre-transition evidence exists | `docs/instructions/phase-gates.json` declares `wav-pcm-lsb-pretransition-evidence` as informational; `src-tauri/src/domain/analyzer.rs` defines `WavPcmLsbAnalyzer`, `wav_pcm_data`, `extract_wav_pcm_lsb_bits`, and focused WAV tests; `src-tauri/src/domain/analyzer_pipeline.rs` registers `WavPcmLsbAnalyzer`. |
+| WAV PCM LSB phase evidence exists | `docs/instructions/phase-gates.json` declares `wav-pcm-lsb-analysis-passes` as required; `src-tauri/src/domain/analyzer.rs` defines `WavPcmLsbAnalyzer`, `wav_pcm_data`, `extract_wav_pcm_lsb_bits`, and focused WAV tests; `src-tauri/src/domain/analyzer_pipeline.rs` registers `WavPcmLsbAnalyzer`. |
 | Frontend build gate exists | `package.json` defines `scripts.build` as `tsc && vite build`. |
 
 ## Gate Verification Runbook
@@ -110,13 +101,13 @@ the command that proves the evidence still holds.
 | `rust-analyzer-tests-exist` | Confirm the named manifest evidence tests still exist: compressed PNG text extraction, same-name packet preservation, default-pipeline container-side-channel packet extraction, PNG after-IEND extraction, JPEG COM/APP extraction, corrupt packet magic decoy recovery in segments and after EOI, invalid signature decoy recovery, APP0/APP15 boundary segment coverage, dense-header streaming, non-payload marker segment exclusion and continuation, marker fill-byte tolerance, standalone TEM header marker handling, restart marker rejection before SOS (including after a payload segment), JPEG after-EOI extraction, multiple verified packet extraction after EOI, invalid after-EOI packet fallback, structural EOI requirement and fill-prefixed EOI handling, scan-data isolation, marker-shaped scan-data isolation, nested SOI scan decoy isolation, length-shaped nested SOI false-EOI decoy isolation, length-looking nested SOI structural EOI recovery, byte-stuffed SOS EOI isolation (including fill-prefixed bytes), SOS TEM, restart/fill marker isolation, malformed SOS marker recovery, malformed SOS false-EOI length recovery, post-SOS marker-segment skipping, same-name multi-segment and segment/after-EOI preservation, verified segment packet preference over after-EOI signature fallback, verified after-EOI packet preference over segment signature fallback, reserved-marker and non-marker header byte rejection, malformed segment handling, and non-JPEG/truncated input safety. | `cargo test --manifest-path src-tauri/Cargo.toml` |
 | `local-file-boundary-evidence` | Confirm the frontend wrapper still sends the selected local media path through `attach_media_file_from_path`, Rust still reads the file bytes inside the command boundary, and stale task IDs are rejected before path inspection. | `cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_reads_local_media_path` plus `cargo test --manifest-path src-tauri/Cargo.toml attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection` |
 | `payload-id-download-disambiguation` | Confirm exact duplicate payload records collapse, distinct same-name verified-packet and signature-scan byte streams keep separate IDs, JPEG segment and after-EOI same-name payloads keep separate downloadable IDs, blank, missing, replaced-result, or reattached-result stale payload IDs are rejected against the current result, the frontend passes `file.id`, and downloads write the bytes for the selected current payload ID. | `npm run validate:download-ipc` plus the payload identity commands in [Testing And Validation](testing.md#recommended-validation-by-change-type). |
-| `wav-pcm-lsb-pretransition-evidence` | Confirm the next-phase WAV PCM LSB source symbols, default registry entry, and focused test names remain visible while `current_phase` stays unchanged. | `cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb` |
+| `wav-pcm-lsb-analysis-passes` | Confirm the completed audio-phase WAV PCM LSB source symbols, default registry entry, and focused test names remain valid. | `cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb` |
 | `frontend-build-passes` | Confirm the frontend still compiles through the checked-in `build` script. This is the transition command and must be fresh for a phase change. | `npm run build` |
 
 For a dependency-free static pass across the phase model, manifest, maintained
 docs, JPEG/PNG source names, named Rust analyzer test functions, local-file
 boundary evidence, build-script gate, payload-ID download contract, and
-informational WAV PCM LSB pre-transition evidence, run
+required WAV PCM LSB phase evidence, run
 `npm run validate:phase-evidence`. This command is useful when local dependency
 setup is blocked, but it does not replace `npm run build` or Rust analyzer tests
 for a phase-transition patch.
@@ -149,29 +140,25 @@ analyzer evidence has changed since the last review.
 
 ## Transition Boundary
 
-Do not move `current_phase` to `audio-lsb-analysis` until:
+Do not move `current_phase` to `release-readiness` until:
 
-1. `npm run build` passes in a checkout with Node dependencies installed.
-2. `cargo test --manifest-path src-tauri/Cargo.toml` passes after any system
-   tooling blocker is resolved. A blocked Rust validation run can be documented,
-   but it must not advance `current_phase`.
-3. The required evidence in `docs/instructions/phase-gates.json` still matches
-   the source after any analyzer changes.
+1. The legacy byte-input command is removed or a real compatibility caller is
+   documented.
+2. Command-level tests cover attach, analyze, and invalid-path behavior.
+3. `npm run build` and `cargo test --manifest-path src-tauri/Cargo.toml` pass.
+4. The required evidence in `docs/instructions/phase-gates.json` still matches
+   the source after any changes.
 
-The next phase is intentionally narrower than the full media-analysis catalog.
-Its source package now exists as a focused WAV PCM sample LSB analyzer with Rust
-tests. The current desktop attach path already sends a selected local path to
-Rust and lets Rust read the file bytes; later ingestion work should focus on
-hardening that boundary, command validation, and retiring the legacy byte-input
-compatibility command when no caller needs it.
+The current desktop attach path sends a selected local path to Rust and lets
+Rust read the file bytes. Current ingestion work is limited to validating that
+boundary and retiring the legacy byte-input compatibility command when no caller
+needs it. Release readiness follows after this public command decision.
 
 ## Remaining Implementation Work
 
-The checked-in `container-side-channels` source gates are present, and the WAV
-PCM sample LSB source/test package now exists as pre-transition audio evidence.
-The next immediate handoff is validation, not another analyzer rewrite: install
-the local frontend dependencies, rerun the transition command, and only then
-prepare a phase-transition patch if every required gate still matches source.
+The checked-in container and audio analyzer gates passed. The next immediate
+handoff is the Rust-side ingestion compatibility decision and its focused
+command-level evidence.
 The payload ID download contract is now included in that gate review because
 same-name recovered byte streams can be emitted by the current container
 analyzers.
@@ -190,7 +177,7 @@ individual source gates is present.
 This document is the maintained handoff for the current analyzer phase. It
 connects the machine-readable phase gates to checked-in source evidence, names
 the exact validation commands for each gate, and records the remaining boundary
-before `audio-lsb-analysis`.
+before `release-readiness`.
 
 The handoff does not replace source or test evidence. Updating this note without
 a passing transition validation run does not advance `current_phase`.

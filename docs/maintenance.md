@@ -58,7 +58,7 @@ and regenerate the source plus exports or remove them in a future documentation
 cleanup.
 
 For phase evidence and the transition boundary between
-`container-side-channels` and `audio-lsb-analysis`, keep
+`rust-side-ingestion` and `release-readiness`, keep
 [Analyzer Phase Readiness](phase-readiness.md) in sync with
 `docs/instructions/phase-gates.json` and the Rust analyzer registry.
 
@@ -83,12 +83,10 @@ Document any skipped validation with the exact blocker.
 
 - Product direction is not selected.
 - Automation remains disabled by design.
-- Phase transition out of `container-side-channels` still requires a fresh
-  `npm run build` result plus the required analyzer evidence gates.
-- The next phase handoff is validation-first: install local Node dependencies if
-  needed, rerun `npm run build`, and record the result before changing phase
-  state. A `tsc: not found` result is a setup blocker, not a repository source
-  failure.
+- Phase transition out of `rust-side-ingestion` requires a fresh
+  transition validation result plus the required analyzer evidence gates.
+- The current phase must resolve whether the legacy byte-input command has a
+  real compatibility caller before moving to release readiness.
 - The Rust-side ingestion boundary now has implementation evidence through the
   path-based attach command. Phase state must still wait for a passing
   transition validation run. Do not change phase state with documentation-only

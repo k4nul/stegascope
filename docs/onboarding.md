@@ -101,9 +101,8 @@ registers:
 - `wav-pcm-lsb-analyzer`: extracts least-significant-bit streams from 8-, 16-,
   24-, and 32-bit uncompressed PCM WAV sample data.
 
-The JPEG and PNG container-side-channel coverage is the current phase evidence.
-WAV PCM sample LSB source and tests now exist, but the machine-readable phase
-state remains unchanged until the transition validation gate passes.
+JPEG and PNG container-side-channel coverage and WAV PCM LSB coverage completed
+their phase gates. Rust-side ingestion is current, and release readiness is next.
 
 Verified StegaScope packets are preferred over signature-only candidates during
 finalization. Finalization removes exact duplicate payload records only,

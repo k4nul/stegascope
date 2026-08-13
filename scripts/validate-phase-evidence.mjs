@@ -94,6 +94,7 @@ const requiredGateIds = [
   "payload-id-download-disambiguation",
   "jpeg-segment-analyzer-exists",
   "png-deep-container-scan-exists",
+  "wav-pcm-lsb-analysis-passes",
 ];
 
 const gateById = new Map(
@@ -139,12 +140,12 @@ expectCondition(
     "node --check scripts/validate-download-ipc.mjs && node --check scripts/validate-phase-evidence.mjs && node --check scripts/validate-toolchain-readiness.mjs && node scripts/validate-phase-evidence.mjs",
 );
 expectCondition(
-  "phase manifest stays on container-side-channels",
-  phaseGates.current_phase === "container-side-channels",
+  "phase manifest stays on rust-side-ingestion",
+  phaseGates.current_phase === "rust-side-ingestion",
 );
 expectCondition(
-  "phase manifest points next to audio-lsb-analysis",
-  phaseGates.next_phase === "audio-lsb-analysis",
+  "phase manifest points next to release-readiness",
+  phaseGates.next_phase === "release-readiness",
 );
 expectCondition(
   "phase transition command includes frontend and Rust validation",
@@ -227,14 +228,14 @@ const expectGateEvidence = (gateId, evidence) => {
   );
 };
 
-const wavPretransitionGate = gateById.get("wav-pcm-lsb-pretransition-evidence");
+const wavAnalysisGate = gateById.get("wav-pcm-lsb-analysis-passes");
 expectCondition(
-  "phase manifest declares wav-pcm-lsb-pretransition-evidence",
-  Boolean(wavPretransitionGate),
+  "phase manifest declares wav-pcm-lsb-analysis-passes",
+  Boolean(wavAnalysisGate),
 );
 expectCondition(
-  "wav-pcm-lsb-pretransition-evidence stays informational",
-  wavPretransitionGate?.required_for_transition === false,
+  "wav-pcm-lsb-analysis-passes is required for transition",
+  wavAnalysisGate?.required_for_transition === true,
 );
 
 expectGateEvidence("frontend-build-passes", "npm run build");
@@ -405,7 +406,7 @@ expectMatch(
   /Box::<PngContainerAnalyzer>::default\(\)/,
 );
 
-for (const evidence of wavPretransitionGate?.evidence ?? []) {
+for (const evidence of wavAnalysisGate?.evidence ?? []) {
   if (evidence === "src-tauri/src/domain/analyzer.rs") {
     continue;
   }
@@ -422,7 +423,7 @@ for (const evidence of wavPretransitionGate?.evidence ?? []) {
   }
   if (evidence.startsWith("cargo test ")) {
     expectCondition(
-      "WAV pre-transition evidence lists focused cargo filter",
+      "WAV analysis gate lists focused cargo filter",
       evidence === "cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb",
     );
     continue;
@@ -471,9 +472,9 @@ expectMatch(
   /npm run validate:toolchain-readiness/,
 );
 expectMatch(
-  "testing docs describe informational WAV pre-transition evidence",
+  "testing docs describe WAV regression evidence",
   testingDocs,
-  /informational WAV pre-transition evidence/,
+  /WAV regression evidence/,
 );
 expectMatch(
   "testing docs list focused WAV PCM LSB filter",
@@ -486,19 +487,19 @@ expectMatch(
   /cargo test --manifest-path src-tauri\/Cargo\.toml default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers/,
 );
 expectMatch(
-  "README declares active container-side-channels phase",
+  "README declares active rust-side-ingestion phase",
   readmeDocs,
-  /active analyzer-expansion phase is `container-side-channels`/,
+  /active analyzer-expansion phase is `rust-side-ingestion`/,
 );
 expectMatch(
-  "README declares audio-lsb-analysis as next phase",
+  "README declares release-readiness as next phase",
   readmeDocs,
-  /`audio-lsb-analysis` listed as the next phase/,
+  /`release-readiness` listed as the next phase/,
 );
 expectMatch(
-  "README keeps npm build as phase transition boundary",
+  "README keeps frontend and Rust validation as phase transition boundary",
   readmeDocs,
-  /fresh `npm run build` transition validation passes/,
+  /full frontend and Rust transition validation/,
 );
 expectMatch(
   "README lists toolchain readiness preflight",
@@ -508,12 +509,12 @@ expectMatch(
 expectMatch(
   "phase readiness declares current phase",
   phaseReadinessDocs,
-  /current phase: `container-side-channels`/,
+  /current phase: `rust-side-ingestion`/,
 );
 expectMatch(
   "phase readiness declares next phase",
   phaseReadinessDocs,
-  /next phase: `audio-lsb-analysis`/,
+  /next phase: `release-readiness`/,
 );
 expectMatch(
   "phase readiness keeps frontend and Rust transition command",
@@ -591,14 +592,14 @@ expectMatch(
   /`cargo test --manifest-path src-tauri\/Cargo\.toml assign_payload_ids --no-run`\s+failed before project code because Cargo could not resolve\s+`index\.crates\.io` while fetching the `image` crate/,
 );
 expectMatch(
-  "phase readiness blocks phase move until build passes",
+  "phase readiness defines the next transition boundary",
   phaseReadinessDocs,
-  /Do not move `current_phase` to `audio-lsb-analysis` until:/,
+  /Do not move `current_phase` to `release-readiness` until:/,
 );
 expectMatch(
-  "phase readiness describes informational WAV pre-transition gate",
+  "phase readiness describes required WAV analysis gate",
   phaseReadinessDocs,
-  /`wav-pcm-lsb-pretransition-evidence` with\s+`required_for_transition: false`/,
+  /`wav-pcm-lsb-analysis-passes` with\s+`required_for_transition: true`/,
 );
 expectMatch(
   "architecture docs describe Rust-owned local file attach boundary",
@@ -621,9 +622,9 @@ expectMatch(
   /Keep user interface\s+state and presentation logic in `src\/`, and keep file loading, analyzer behavior,\s+payload bytes, and filesystem writes in `src-tauri\/`/,
 );
 expectMatch(
-  "onboarding docs describe current analyzer phase evidence",
+  "onboarding docs describe completed analyzer phases and current ingestion",
   onboardingDocs,
-  /JPEG and PNG container-side-channel coverage is the current phase evidence[\s\S]*?phase\s+state remains unchanged until the transition validation gate passes/,
+  /JPEG and PNG container-side-channel coverage and WAV PCM LSB coverage completed[\s\S]*?Rust-side ingestion is current/,
 );
 expectMatch(
   "onboarding docs describe current payload ID contract",
@@ -631,9 +632,9 @@ expectMatch(
   /Downloads accept an ID only while the matching payload is in\s+the running task's current analysis result/,
 );
 expectMatch(
-  "maintenance docs keep phase transition blocked on fresh build",
+  "maintenance docs keep audio phase transition blocked on fresh validation",
   maintenanceDocs,
-  /Phase transition out of `container-side-channels` still requires a fresh\s+`npm run build` result/,
+  /Phase transition out of `rust-side-ingestion` requires a fresh\s+transition validation result/,
 );
 expectMatch(
   "maintenance docs list dependency-free static recovery chain",

@@ -1,10 +1,10 @@
 {
   "schema_version": "1.0.0",
   "project": "stegascope",
-  "current_phase": "container-side-channels",
-  "next_phase": "audio-lsb-analysis",
+  "current_phase": "rust-side-ingestion",
+  "next_phase": "release-readiness",
   "transition": {
-    "intent": "Move from container-side-channels only after the first image-container analyzer package is implemented and tested, same-name payload downloads use deterministic payload IDs with current-result lookup, and the current frontend/Rust local-file boundary remains explicit.",
+    "intent": "Move from rust-side-ingestion only after the path-based attach boundary and command behavior are validated and the legacy byte-input command is either removed or retained for a documented compatibility caller.",
     "mode": "machine-gated-analyzer-expansion",
     "validation_command": "npm run build",
     "transition_validation_command": "npm run build && cargo test --manifest-path src-tauri/Cargo.toml",
@@ -264,10 +264,10 @@
       "on_failure": "Implement the PNG deep container scan before phase transition."
     },
     {
-      "id": "wav-pcm-lsb-pretransition-evidence",
+      "id": "wav-pcm-lsb-analysis-passes",
       "status": "machine-check",
-      "required_for_transition": false,
-      "description": "Pre-transition source and test evidence for the next audio-lsb-analysis phase must remain visible, but this informational gate does not advance current_phase without a passing transition validation run.",
+      "required_for_transition": true,
+      "description": "The completed audio-lsb-analysis phase remains a required regression gate for the WAV PCM LSB analyzer source, registry entry, and focused tests.",
       "evidence": [
         "src-tauri/src/domain/analyzer.rs",
         "src-tauri/src/domain/analyzer_pipeline.rs",
@@ -281,7 +281,7 @@
         "wav_pcm_lsb_analyzer_ignores_unsupported_or_truncated_wav",
         "cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb"
       ],
-      "on_failure": "Keep audio-lsb-analysis as next_phase and restore WAV PCM LSB source/test evidence before any later phase-transition review."
+      "on_failure": "Stay in rust-side-ingestion and restore WAV PCM LSB source/test evidence before phase transition."
     }
   ]
 }

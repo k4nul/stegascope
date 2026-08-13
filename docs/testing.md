@@ -10,7 +10,7 @@ changed.
 | --- | --- | --- |
 | Frontend or Vite changes | `npm run build` | Runs `tsc && vite build`. |
 | Download IPC contract changes | `npm run validate:download-ipc` | Dependency-free static check that payload IDs are assigned from the Rust payload identity, stored with current task payload bytes, passed by every frontend download callsite as `file.id`, resolved by Rust before download, and listed in phase evidence. |
-| Phase evidence review | `npm run validate:phase-evidence` | Dependency-free static check that the phase model, phase manifest, maintained docs, build-script gate, JPEG/PNG source evidence, named Rust analyzer test functions, local-file boundary, payload-ID download validator, and informational WAV pre-transition evidence still line up. It does not replace `npm run build` or Rust tests for a phase transition. |
+| Phase evidence review | `npm run validate:phase-evidence` | Dependency-free static check that the phase model, phase manifest, maintained docs, build-script gate, JPEG/PNG source evidence, named Rust analyzer test functions, local-file boundary, payload-ID download validator, and WAV regression evidence still line up. It does not replace `npm run build` or Rust tests for a phase transition. |
 | Static recovery chain | `npm run validate:static` | Dependency-free validator chain that syntax-checks local validator scripts, then runs the phase evidence validator directly; the phase evidence validator includes the download IPC contract check. |
 | Toolchain readiness preflight | `npm run validate:toolchain-readiness` | Dependency-free setup check that classifies missing local `tsc`/`vite` binaries, offline Cargo metadata, and locked Cargo dependency resolution before a transition validation attempt. |
 | Rust or Tauri backend changes | `cargo check --manifest-path src-tauri/Cargo.toml` | Fast Rust/Tauri compile check. |
@@ -187,15 +187,13 @@ also support the current PNG phase gate. The default-pipeline filter proves the
 registered analyzer set emits both PNG after-IEND and JPEG after-EOI packet
 payloads through the current pipeline.
 
-For the pre-transition audio evidence, after the current
-`container-side-channels` gate is otherwise ready:
+For the completed WAV phase regression evidence:
 
 ```bash
 cargo test --manifest-path src-tauri/Cargo.toml wav_pcm_lsb
 ```
 
-This filter covers the audio analyzer package and default pipeline WAV evidence
-without changing phase state by itself.
+This filter covers the audio analyzer package and default pipeline WAV evidence.
 
 For the payload identity and same-name download path:
 

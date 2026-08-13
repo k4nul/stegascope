@@ -26,12 +26,12 @@ tracked management policy marker; private maintainer overlays, including
 Git and are not part of the publishable handoff. Documentation should describe
 the current implementation without locking in the MVP roadmap.
 
-The active analyzer-expansion phase is `container-side-channels`, with
-`audio-lsb-analysis` listed as the next phase. Source and Rust tests for the WAV
-PCM LSB analyzer already exist, but the phase should not move forward until a
-fresh `npm run build` transition validation passes in a checkout with Node
-dependencies installed. See [Analyzer Phase Readiness](docs/phase-readiness.md)
-for the gate-by-gate handoff.
+The active analyzer-expansion phase is `rust-side-ingestion`, with
+`release-readiness` listed as the next phase. The image-container and WAV PCM
+LSB analyzer phases passed their executable gates. The current work is limited
+to hardening the local-file command boundary and resolving legacy byte-input
+compatibility before the full frontend and Rust transition validation. See
+[Analyzer Phase Readiness](docs/phase-readiness.md) for the gate-by-gate handoff.
 
 Current implementation facts:
 
@@ -156,9 +156,8 @@ Cargo metadata blockers without changing phase state.
 ## Suggested Next Steps
 
 1. Select and document the MVP product direction before enabling automation.
-2. Produce a fresh `npm run build` transition result before attempting a phase
-   transition out of `container-side-channels`; install dependencies and resolve
-   local npm, DNS, or cache blockers first if needed.
+2. Resolve the legacy byte-input compatibility decision, then rerun the full
+   frontend and Rust validation before moving to `release-readiness`.
 3. Split frontend analysis surfaces into feature modules once the workflow is
    accepted.
 4. Add remaining negative-path attach/analyze Rust tests and critical UI/API flow
