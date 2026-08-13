@@ -4322,6 +4322,27 @@ mod tests {
     }
 
     #[test]
+    fn embedded_signature_analyzer_ignores_header_collisions_before_candidate_cap() {
+        let mut bytes = b"%PDF-a%PDF-b%PDF-c".to_vec();
+        bytes.resize(40, b'x');
+        bytes.extend_from_slice(valid_pdf_payload());
+        let media = LoadedMedia {
+            source: MediaFileInfo::new("carrier.png", bytes.len() as u64, "image/png"),
+            bytes,
+        };
+
+        let outcome = EmbeddedSignatureAnalyzer::default()
+            .analyze(&media)
+            .unwrap();
+
+        assert!(outcome.extracted_payloads.iter().any(|payload| {
+            payload.file.analyzer_name == "embedded-signature-analyzer"
+                && payload.source == PayloadSource::SignatureScan
+                && payload.bytes == valid_pdf_payload()
+        }));
+    }
+
+    #[test]
     fn verified_packet_suppresses_signature_only_candidates() {
         let secret = b"\x89PNG\r\n\x1A\nverified-blueprint-bytes";
         let packet = stegascope_packet("", secret);

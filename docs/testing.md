@@ -179,6 +179,7 @@ cargo test --manifest-path src-tauri/Cargo.toml jpeg_segment_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml png_container_analyzer
 cargo test --manifest-path src-tauri/Cargo.toml compressed_png
 cargo test --manifest-path src-tauri/Cargo.toml default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers
+cargo test --manifest-path src-tauri/Cargo.toml embedded_signature_analyzer_ignores_header_collisions_before_candidate_cap
 ```
 
 The `png_container_analyzer` filter covers after-IEND payload tests. The
@@ -186,6 +187,9 @@ The `png_container_analyzer` filter covers after-IEND payload tests. The
 also support the current PNG phase gate. The default-pipeline filter proves the
 registered analyzer set emits both PNG after-IEND and JPEG after-EOI packet
 payloads through the current pipeline.
+The embedded-signature filter proves that header-region signature collisions do
+not consume the three-candidate budget before a valid payload beyond the media
+header guard is inspected.
 
 For the completed WAV phase regression evidence:
 

@@ -110,6 +110,7 @@
         "default_pipeline_extracts_container_side_channel_packets_from_registered_analyzers",
         "png_container_analyzer_extracts_packet_payload_after_iend",
         "png_container_analyzer_uses_structural_iend_for_trailing_payload",
+        "embedded_signature_analyzer_ignores_header_collisions_before_candidate_cap",
         "jpeg_segment_analyzer_extracts_packet_payload_from_comment_segment",
         "jpeg_segment_analyzer_skips_corrupt_packet_decoys_before_valid_comment_packet",
         "jpeg_segment_analyzer_extracts_multiple_packet_payloads_from_single_comment_segment",
