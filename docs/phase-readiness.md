@@ -12,7 +12,7 @@ transition validation command and required analyzer evidence gates pass locally.
 
 - current phase: `container-side-channels`
 - next phase: `audio-lsb-analysis`
-- transition validation command: `npm run build`
+- transition validation command: `npm run build && cargo test --manifest-path src-tauri/Cargo.toml`
 
 The current phase covers the first image-container analyzer package:
 
@@ -40,6 +40,15 @@ The practical handoff state is:
   failed.
 
 ## Latest Recovery Snapshot
+
+August 13, 2026 KST validation recovery completed the full transition command.
+`npm run validate:static` passed 304 phase-evidence checks, the download IPC
+validator passed 86 checks, `npm run build` completed, and an isolated Debian
+Tauri toolchain ran all 143 Rust tests successfully. The run exposed and fixed
+three compile errors plus two analyzer regressions: nested invalid PDF headers
+can no longer borrow a later payload's EOF marker, and PNG metadata payload
+names use the metadata-chunk ordinal rather than unrelated encoder chunk count.
+The prior dependency-availability pause is no longer current.
 
 July 4, 2026 KST validation-chain recovery review keeps `current_phase` at
 `container-side-channels`. The recovered package includes the container

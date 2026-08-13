@@ -147,8 +147,9 @@ expectCondition(
   phaseGates.next_phase === "audio-lsb-analysis",
 );
 expectCondition(
-  "phase transition command remains npm run build",
-  phaseGates.transition?.transition_validation_command === "npm run build",
+  "phase transition command includes frontend and Rust validation",
+  phaseGates.transition?.transition_validation_command ===
+    "npm run build && cargo test --manifest-path src-tauri/Cargo.toml",
 );
 expectCondition(
   "phase validation command remains npm run build",
@@ -515,9 +516,9 @@ expectMatch(
   /next phase: `audio-lsb-analysis`/,
 );
 expectMatch(
-  "phase readiness keeps npm build as transition command",
+  "phase readiness keeps frontend and Rust transition command",
   phaseReadinessDocs,
-  /transition validation command: `npm run build`/,
+  /transition validation command: `npm run build && cargo test --manifest-path src-tauri\/Cargo\.toml`/,
 );
 expectMatch(
   "phase readiness warns static validator does not replace transition validation",

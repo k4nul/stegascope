@@ -611,7 +611,7 @@ fn wav_pcm_data(bytes: &[u8]) -> Option<WavPcmData<'_>> {
 
     let mut format = None;
     let mut data = None;
-    let mut offset = 12;
+    let mut offset: usize = 12;
 
     while offset.checked_add(8)? <= bytes.len() {
         let chunk_type = &bytes[offset..offset + 4];
@@ -1069,7 +1069,7 @@ fn structural_jpeg_eoi_end(bytes: &[u8]) -> Option<usize> {
                 let (_, scan_data_start) = jpeg_segment_data_bounds(bytes, marker.payload_offset)?;
                 return jpeg_scan_data_eoi_end(bytes, scan_data_start);
             }
-            marker if jpeg_header_marker_has_no_payload(marker) => {
+            marker_value if jpeg_header_marker_has_no_payload(marker_value) => {
                 offset = marker.payload_offset;
             }
             _ => {
@@ -1242,13 +1242,13 @@ fn png_metadata_chunks(bytes: &[u8]) -> Vec<PngChunk<'_>> {
             break;
         }
 
-        index += 1;
         let kind = &bytes[length_end..kind_end];
         if kind == b"IEND" {
             break;
         }
 
         if is_png_metadata_chunk(kind) {
+            index += 1;
             chunks.push(PngChunk {
                 index,
                 kind,
@@ -1697,7 +1697,14 @@ fn validate_image_payload(bytes: &[u8], label: &str) -> Option<String> {
 }
 
 fn validate_pdf_payload(bytes: &[u8]) -> Option<String> {
-    if bytes.starts_with(b"%PDF-") && find_signature_offsets(bytes, b"%%EOF").next().is_some() {
+    let eof_offset = find_signature_offsets(bytes, b"%%EOF").next()?;
+    let nested_header_offset = find_signature_offsets(bytes.get(5..)?, b"%PDF-")
+        .next()
+        .and_then(|offset| offset.checked_add(5));
+
+    if bytes.starts_with(b"%PDF-")
+        && nested_header_offset.is_none_or(|offset| eof_offset < offset)
+    {
         Some("PDF header and EOF marker found".to_string())
     } else {
         None
@@ -1902,7 +1909,10 @@ impl Iterator for SignatureOffsets<'_, '_> {
     }
 }
 
-fn find_signature_offsets(bytes: &[u8], signature: &[u8]) -> SignatureOffsets<'_, '_> {
+fn find_signature_offsets<'a, 'b>(
+    bytes: &'a [u8],
+    signature: &'b [u8],
+) -> SignatureOffsets<'a, 'b> {
     SignatureOffsets {
         bytes,
         signature,
