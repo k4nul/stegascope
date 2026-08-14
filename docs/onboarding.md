@@ -48,8 +48,6 @@ Registered Rust commands include:
 - `attach_media_file_from_path`: validates a selected local media path, reads
   the file in Rust, and creates an image, audio, or video loader from canonical
   media metadata.
-- `attach_media_file`: legacy byte-input command used by command-level tests and
-  compatibility callers.
 - `analyze_task`: runs the default analyzer set and replaces the task's extracted
   files with the latest payload candidates.
 - `get_extracted_files`: returns the extracted file metadata for a task.

@@ -374,6 +374,16 @@ expectMatch(
   rustCommandSource,
   /fn attach_media_file_from_path_command_test_rejects_missing_task_before_path_inspection/,
 );
+expectCondition(
+  "legacy byte-input command is not registered",
+  !/generate_handler!\[[\s\S]*?\battach_media_file\s*,/.test(rustCommandSource),
+);
+expectCondition(
+  "legacy byte-input Tauri command wrapper is absent",
+  !/#\s*\[\s*tauri::command\s*\]\s*fn\s+attach_media_file\s*\(/.test(
+    rustCommandSource,
+  ),
+);
 
 for (const evidence of [
   "JpegSegmentAnalyzer",

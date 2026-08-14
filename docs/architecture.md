@@ -40,7 +40,6 @@ process-local `AppState`. The active commands are:
 
 - `create_task`
 - `attach_media_file_from_path`
-- `attach_media_file`
 - `analyze_task`
 - `get_extracted_files`
 - `download_extracted_file`

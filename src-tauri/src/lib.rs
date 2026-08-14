@@ -49,11 +49,10 @@ struct CreateTaskInput {
     date: String,
 }
 
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
+#[cfg(test)]
+#[derive(Debug)]
 struct UploadedMediaInput {
     file_name: String,
-    file_size_bytes: u64,
     file_type: String,
     bytes: Vec<u8>,
 }
@@ -146,15 +145,7 @@ fn create_task_with_state(
     Ok(task_to_response(&task_id, task))
 }
 
-#[tauri::command]
-fn attach_media_file(
-    task_id: String,
-    input: UploadedMediaInput,
-    state: State<'_, AppState>,
-) -> Result<TaskResponse, String> {
-    attach_media_file_with_state(task_id, input, state.inner())
-}
-
+#[cfg(test)]
 fn attach_media_file_with_state(
     task_id: String,
     input: UploadedMediaInput,
@@ -382,7 +373,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             bootstrap_status,
             create_task,
-            attach_media_file,
             attach_media_file_from_path,
             analyze_task,
             get_extracted_files,
@@ -720,7 +710,6 @@ mod tests {
             task.task_id,
             UploadedMediaInput {
                 file_name: "carrier.png".to_string(),
-                file_size_bytes: 1,
                 file_type: String::new(),
                 bytes: png_bytes.clone(),
             },
@@ -747,7 +736,6 @@ mod tests {
             "   ".to_string(),
             UploadedMediaInput {
                 file_name: "carrier.png".to_string(),
-                file_size_bytes: 4,
                 file_type: "image/png".to_string(),
                 bytes: vec![1, 2, 3, 4],
             },
@@ -760,7 +748,6 @@ mod tests {
             task.task_id.clone(),
             UploadedMediaInput {
                 file_name: "   ".to_string(),
-                file_size_bytes: 4,
                 file_type: "image/png".to_string(),
                 bytes: vec![1, 2, 3, 4],
             },
@@ -773,7 +760,6 @@ mod tests {
             task.task_id.clone(),
             UploadedMediaInput {
                 file_name: "empty.png".to_string(),
-                file_size_bytes: 0,
                 file_type: "image/png".to_string(),
                 bytes: Vec::new(),
             },
@@ -786,7 +772,6 @@ mod tests {
             task.task_id,
             UploadedMediaInput {
                 file_name: "carrier.bin".to_string(),
-                file_size_bytes: 4,
                 file_type: String::new(),
                 bytes: vec![1, 2, 3, 4],
             },
@@ -807,7 +792,6 @@ mod tests {
             "task-missing".to_string(),
             UploadedMediaInput {
                 file_name: "carrier.bin".to_string(),
-                file_size_bytes: 4,
                 file_type: String::new(),
                 bytes: vec![1, 2, 3, 4],
             },
@@ -1028,7 +1012,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "carrier.png".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: png_image_bytes(),
             },
@@ -1270,7 +1253,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "duplicate-packets.png".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: carrier_bytes,
             },
@@ -1352,7 +1334,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "duplicate-packets.jpg".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: carrier_bytes,
             },
@@ -1432,7 +1413,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "duplicate-segment-after-eoi-packets.jpg".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: carrier_bytes,
             },
@@ -1510,7 +1490,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "first-carrier.png".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: png_with_text_chunks(&[(b"Comment".as_slice(), first_packet.as_slice())]),
             },
@@ -1529,7 +1508,6 @@ mod tests {
             task_id.clone(),
             UploadedMediaInput {
                 file_name: "second-carrier.png".to_string(),
-                file_size_bytes: 0,
                 file_type: String::new(),
                 bytes: png_with_text_chunks(&[(b"Comment".as_slice(), second_packet.as_slice())]),
             },

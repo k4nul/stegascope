@@ -150,23 +150,21 @@ Do not move `current_phase` to `release-readiness` until:
    the source after any changes.
 
 The current desktop attach path sends a selected local path to Rust and lets
-Rust read the file bytes. Current ingestion work is limited to validating that
-boundary and retiring the legacy byte-input compatibility command when no caller
-needs it. Release readiness follows after this public command decision.
+Rust read the file bytes. The unused legacy byte-input command has been removed
+from the registered Tauri surface; byte fixtures remain test-only helpers.
+Release readiness follows the retained path-boundary validation.
 
 ## Remaining Implementation Work
 
-The checked-in container and audio analyzer gates passed. The next immediate
-handoff is the Rust-side ingestion compatibility decision and its focused
-command-level evidence.
+The checked-in container, audio analyzer, path-based ingestion, and legacy
+command-removal gates pass. The next handoff is release readiness.
 The payload ID download contract is now included in that gate review because
 same-name recovered byte streams can be emitted by the current container
 analyzers.
 The ingestion boundary now has implementation evidence: the current frontend
 attach wrapper sends a selected local media path, and Rust reads file bytes
-inside `attach_media_file_from_path`. The legacy byte-input command remains
-registered for compatibility and command-level coverage, so later cleanup can
-remove that surface once no caller needs it.
+inside `attach_media_file_from_path`. The legacy byte-input command is no longer
+registered; command-level byte fixtures are compiled only for Rust tests.
 
 Do not use this documentation note to advance phase state. Phase state still
 needs a passing transition validation run, even when implementation evidence for
